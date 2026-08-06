@@ -135,14 +135,15 @@ async def main():
         for username in SOLANA_WATCHLIST:
             try:
                 user = await client.get_user_by_screen_name(username)
-                tweets = await user.get_tweets("Tweets", count=2)
+                tweets = await user.get_tweets("Tweets")
 
                 for tweet in tweets:
-                    if tweet.id in seen_tweet_ids:
+                    tweet_id = getattr(tweet, "id", None)
+                    if not tweet_id or tweet_id in seen_tweet_ids:
                         continue
 
-                    seen_tweet_ids.add(tweet.id)
-                    tweet_text = tweet.full_text
+                    seen_tweet_ids.add(tweet_id)
+                    tweet_text = getattr(tweet, "full_text", getattr(tweet, "text", ""))
                     sol_contracts = extract_solana_address(tweet_text)
 
                     if sol_contracts:
@@ -157,7 +158,7 @@ async def main():
                             f"{security_info}\n"
                             f"🦅 <a href='https://dexscreener.com/solana/{ca}'>DexScreener</a> | "
                             f"🧪 <a href='https://photon-sol.tinyastro.io/en/lp/{ca}'>Photon</a>\n\n"
-                            f"🔗 <a href='https://x.com/{username}/status/{tweet.id}'>مشاهده توییت</a>"
+                            f"🔗 <a href='https://x.com/{username}/status/{tweet_id}'>مشاهده توییت</a>"
                         )
                         send_telegram_alert(alert_msg)
 

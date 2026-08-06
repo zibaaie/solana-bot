@@ -97,68 +97,61 @@ def check_token_security(mint_address):
         return "🛡️ <b>RugCheck:</b> خطا در استعلام API"
 
 
-def fetch_tweets_direct(username):
-    # دریافت اطلاعات از GraphQL open endpoint
-    url = f"https://cdn.syndication.twimg.com/tweet-result?id=1812154381830492416"  # تست هلدینگ
+def fetch_tweets_pub(username):
+    url = f"https://s.jina.ai/https://x.com/{username}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     }
-    # استفاده از سرویس API جایگزین و لایت
-    api_url = f"https://api.vxtwitter.com/{username}"
     try:
-        resp = requests.get(api_url, headers=headers, timeout=8)
+        resp = requests.get(url, headers=headers, timeout=10)
         if resp.status_code == 200:
-            data = resp.json()
-            tweets = data.get("tweets", [])
-            if tweets:
-                latest = tweets[0]
-                tweet_id = latest.get("id")
-                text = latest.get("text", "")
-                return [(str(tweet_id), text)]
+            text = resp.text
+            # استخراج تمام آدرس‌های سولانا از متن صفحه
+            sol_addresses = extract_solana_address(text)
+            if sol_addresses:
+                # ایجاد یک ID شناور بر اساس متن و آدرس برای جلوگیری از ارسال تکراری
+                fake_id = hash(f"{username}_{sol_addresses[0]}")
+                return [(str(fake_id), text, sol_addresses[0])]
     except Exception as e:
-        print(f"Error fetching @{username}: {e}")
+        print(f"Error scanning @{username}: {e}")
     return []
 
 
 async def main():
-    print("🚀 Fast Direct Scanner Online...")
-
-    # تست اولیه اتصال تلگرام
-    send_telegram_alert("⚙️ <b>Solana Scanner Rebooted!</b>\nسیستم فعال شد و آماده اسکن است.")
+    print("🚀 Deep Web-Scraper Online...")
 
     while True:
         for username in SOLANA_WATCHLIST:
             try:
-                tweets = fetch_tweets_direct(username)
+                results = fetch_tweets_pub(username)
 
-                for tweet_id, tweet_text in tweets:
-                    if not tweet_id or tweet_id in seen_tweet_ids:
+                for tweet_id, raw_text, ca in results:
+                    if tweet_id in seen_tweet_ids:
                         continue
 
                     seen_tweet_ids.add(tweet_id)
-                    sol_contracts = extract_solana_address(tweet_text)
+                    security_info = check_token_security(ca)
 
-                    if sol_contracts:
-                        ca = sol_contracts[0]
-                        security_info = check_token_security(ca)
+                    # جداسازی بخش کوتاه مربوط به توییت
+                    clean_snippet = raw_text[:300].replace("\n", " ")
 
-                        alert_msg = (
-                            f"☀️ <b>SOLANA ALPHA DETECTED!</b>\n\n"
-                            f"👤 <b>Account:</b> @{username}\n"
-                            f"📝 <b>Tweet:</b> {tweet_text}\n\n"
-                            f"🔑 <b>Solana CA:</b>\n<code>{ca}</code>\n\n"
-                            f"{security_info}\n"
-                            f"🦅 <a href='https://dexscreener.com/solana/{ca}'>DexScreener</a> | "
-                            f"🧪 <a href='https://photon-sol.tinyastro.io/en/lp/{ca}'>Photon</a>\n\n"
-                            f"🔗 <a href='https://x.com/{username}/status/{tweet_id}'>مشاهده توییت</a>"
-                        )
-                        send_telegram_alert(alert_msg)
+                    alert_msg = (
+                        f"☀️ <b>SOLANA ALPHA DETECTED!</b>\n\n"
+                        f"👤 <b>Account:</b> @{username}\n"
+                        f"📝 <b>Snippet:</b> {clean_snippet}...\n\n"
+                        f"🔑 <b>Solana CA:</b>\n<code>{ca}</code>\n\n"
+                        f"{security_info}\n"
+                        f"🦅 <a href='https://dexscreener.com/solana/{ca}'>DexScreener</a> | "
+                        f"🧪 <a href='https://photon-sol.tinyastro.io/en/lp/{ca}'>Photon</a>\n\n"
+                        f"🔗 <a href='https://x.com/{username}'>مشاهده اکانت</a>"
+                    )
+                    send_telegram_alert(alert_msg)
 
             except Exception as e:
                 print(f"Skip @{username}: {e}")
 
-            await asyncio.sleep(3)
-        await asyncio.sleep(15)
+            await asyncio.sleep(2)
+        await asyncio.sleep(10)
 
 
 if __name__ == "__main__":

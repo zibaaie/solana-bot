@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import re
 import requests
@@ -94,15 +95,39 @@ def check_token_security(mint_address):
         return "🛡️ <b>RugCheck:</b> خطا در استعلام API"
 
 
+def load_cookies_safely(client, file_path="cookies.json"):
+    if not os.path.exists(file_path):
+        print(f"⚠️ {file_path} not found!")
+        return False
+
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        cookie_dict = {}
+        if isinstance(data, list):
+            for item in data:
+                if isinstance(item, dict) and "name" in item and "value" in item:
+                    cookie_dict[item["name"]] = item["value"]
+        elif isinstance(data, dict):
+            cookie_dict = data
+
+        if cookie_dict:
+            client.set_cookies(cookie_dict)
+            print("✅ Logged in via cookies.json successfully!")
+            return True
+        else:
+            print("⚠️ Invalid cookie structure in cookies.json")
+            return False
+
+    except Exception as e:
+        print(f"⚠️ Error parsing cookies.json: {e}")
+        return False
+
+
 async def main():
     client = Client("en-US")
-
-    # بارگذاری نشست از فایل کوکی
-    if os.path.exists("cookies.json"):
-        client.load_cookies("cookies.json")
-        print("✅ Logged in via cookies.json")
-    else:
-        print("⚠️ cookies.json not found! Running in unauthenticated mode.")
+    load_cookies_safely(client, "cookies.json")
 
     print("🚀 Solana Alpha Scanner Online...")
 

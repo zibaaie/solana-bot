@@ -99,33 +99,57 @@ def check_token_security(mint_address):
         return "🛡️ <b>RugCheck:</b> خطا در استعلام API"
 
 
-def fetch_tweets_pub(username):
-    url = f"https://s.jina.ai/https://x.com/{username}"
+def fetch_tweets_fast_rss(username):
+    # دریافت مستقیم فید فوری از چندین آینه Nitter فعال
+    instances = [
+        "https://nitter.net",
+        "https://nitter.poast.org",
+        "https://nitter.privacydev.net",
+        "https://nitter.space"
+    ]
+    
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
     }
+
+    for instance in instances:
+        try:
+            url = f"{instance}/{username}/rss"
+            resp = requests.get(url, headers=headers, timeout=5)
+            if resp.status_code == 200:
+                text = resp.text
+                sol_addresses = extract_solana_address(text)
+                if sol_addresses:
+                    ca = sol_addresses[0]
+                    tweet_id = f"{username}_{ca}"
+                    return [(tweet_id, text, ca)]
+        except Exception:
+            continue
+            
+    # ساختار بک‌آپ آنلاین برای گرفتن آخرین پست‌
     try:
-        resp = requests.get(url, headers=headers, timeout=10)
-        if resp.status_code == 200 and resp.text:
-            text = str(resp.text)
+        backup_url = f"https://fixupx.com/{username}"
+        resp = requests.get(backup_url, headers=headers, timeout=5)
+        if resp.status_code == 200:
+            text = resp.text
             sol_addresses = extract_solana_address(text)
             if sol_addresses:
                 ca = sol_addresses[0]
-                fake_id = f"{username}_{ca}"
-                return [(fake_id, text, ca)]
-    except Exception as e:
-        print(f"Error scanning @{username}: {e}")
+                return [(f"{username}_{ca}", text, ca)]
+    except Exception:
+        pass
+
     return []
 
 
 async def main():
-    print("🚀 Deep Web-Scraper Engine Started Successfully...")
-    send_telegram_alert("✅ <b>Solana Bot Engine Active!</b>\nسیستم بدون مشکل اجرا شد.")
+    print("🚀 Instant Solana Scanner Engine Started...")
+    send_telegram_alert("⚡ <b>Instant Scanner Active!</b>\nسیستم اسکن لحظه‌ای فعال شد.")
 
     while True:
         for username in SOLANA_WATCHLIST:
             try:
-                results = fetch_tweets_pub(username)
+                results = fetch_tweets_fast_rss(username)
 
                 for tweet_id, raw_text, ca in results:
                     if not tweet_id or tweet_id in seen_tweet_ids:
@@ -133,12 +157,10 @@ async def main():
 
                     seen_tweet_ids.add(tweet_id)
                     security_info = check_token_security(ca)
-                    clean_snippet = raw_text[:250].replace("\n", " ") if raw_text else ""
 
                     alert_msg = (
                         f"☀️ <b>SOLANA ALPHA DETECTED!</b>\n\n"
-                        f"👤 <b>Account:</b> @{username}\n"
-                        f"📝 <b>Snippet:</b> {clean_snippet}...\n\n"
+                        f"👤 <b>Account:</b> @{username}\n\n"
                         f"🔑 <b>Solana CA:</b>\n<code>{ca}</code>\n\n"
                         f"{security_info}\n"
                         f"🦅 <a href='https://dexscreener.com/solana/{ca}'>DexScreener</a> | "
@@ -148,10 +170,10 @@ async def main():
                     send_telegram_alert(alert_msg)
 
             except Exception as e:
-                print(f"Loop Exception @{username}: {e}")
+                print(f"Error checking @{username}: {e}")
 
-            await asyncio.sleep(2)
-        await asyncio.sleep(15)
+            await asyncio.sleep(1.5)
+        await asyncio.sleep(10)
 
 
 if __name__ == "__main__":

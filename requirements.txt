@@ -1,4 +1,2 @@
+twikit==2.1.2
 requests
-twikit>=2.1.2
-requests
-asyncio

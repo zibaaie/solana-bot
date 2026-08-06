@@ -62,10 +62,12 @@ def send_telegram_alert(message):
 
 
 def extract_solana_address(text):
+    if not text:
+        return []
     solana_pattern = (
         r"\b[1-9A-HJ-NP-Za-km-z]{32,44}pump\b|\b[1-9A-HJ-NP-Za-km-z]{43,44}\b"
     )
-    return re.findall(solana_pattern, text)
+    return re.findall(solana_pattern, str(text))
 
 
 def check_token_security(mint_address):
@@ -84,7 +86,7 @@ def check_token_security(mint_address):
                 risk_label = "🔴 <b>High Risk</b>"
 
             risks = data.get("risks", [])
-            risk_details = [f"• {r.get('name')}" for r in risks[:3]]
+            risk_details = [f"• {r.get('name')}" for r in risks[:3]] if risks else []
             risk_text = "\n".join(risk_details) if risk_details else "• پاک"
 
             return (
@@ -104,21 +106,21 @@ def fetch_tweets_pub(username):
     }
     try:
         resp = requests.get(url, headers=headers, timeout=10)
-        if resp.status_code == 200:
-            text = resp.text
-            # استخراج تمام آدرس‌های سولانا از متن صفحه
+        if resp.status_code == 200 and resp.text:
+            text = str(resp.text)
             sol_addresses = extract_solana_address(text)
             if sol_addresses:
-                # ایجاد یک ID شناور بر اساس متن و آدرس برای جلوگیری از ارسال تکراری
-                fake_id = hash(f"{username}_{sol_addresses[0]}")
-                return [(str(fake_id), text, sol_addresses[0])]
+                ca = sol_addresses[0]
+                fake_id = f"{username}_{ca}"
+                return [(fake_id, text, ca)]
     except Exception as e:
         print(f"Error scanning @{username}: {e}")
     return []
 
 
 async def main():
-    print("🚀 Deep Web-Scraper Online...")
+    print("🚀 Deep Web-Scraper Engine Started Successfully...")
+    send_telegram_alert("✅ <b>Solana Bot Engine Active!</b>\nسیستم بدون مشکل اجرا شد.")
 
     while True:
         for username in SOLANA_WATCHLIST:
@@ -126,14 +128,12 @@ async def main():
                 results = fetch_tweets_pub(username)
 
                 for tweet_id, raw_text, ca in results:
-                    if tweet_id in seen_tweet_ids:
+                    if not tweet_id or tweet_id in seen_tweet_ids:
                         continue
 
                     seen_tweet_ids.add(tweet_id)
                     security_info = check_token_security(ca)
-
-                    # جداسازی بخش کوتاه مربوط به توییت
-                    clean_snippet = raw_text[:300].replace("\n", " ")
+                    clean_snippet = raw_text[:250].replace("\n", " ") if raw_text else ""
 
                     alert_msg = (
                         f"☀️ <b>SOLANA ALPHA DETECTED!</b>\n\n"
@@ -148,10 +148,10 @@ async def main():
                     send_telegram_alert(alert_msg)
 
             except Exception as e:
-                print(f"Skip @{username}: {e}")
+                print(f"Loop Exception @{username}: {e}")
 
             await asyncio.sleep(2)
-        await asyncio.sleep(10)
+        await asyncio.sleep(15)
 
 
 if __name__ == "__main__":

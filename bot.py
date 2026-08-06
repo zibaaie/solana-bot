@@ -2,7 +2,6 @@ import asyncio
 import os
 import re
 import requests
-import xml.etree.ElementTree as ET
 
 # ----------------- تنظیمات -----------------
 TELEGRAM_BOT_TOKEN = os.getenv(
@@ -46,13 +45,6 @@ SOLANA_WATCHLIST = [
 ]
 
 seen_tweet_ids = set()
-
-# سرورهای عمومی RSS/Nitter جهت پشتیبان‌گیری
-NITTER_INSTANCES = [
-    "https://nitter.privacydev.net",
-    "https://nitter.poast.org",
-    "https://nitter.lucabased.xyz",
-]
 
 
 def send_telegram_alert(message):
@@ -105,33 +97,41 @@ def check_token_security(mint_address):
         return "🛡️ <b>RugCheck:</b> خطا در استعلام API"
 
 
-def fetch_tweets_rss(username):
-    for instance in NITTER_INSTANCES:
-        url = f"{instance}/{username}/rss"
-        try:
-            resp = requests.get(url, timeout=7)
-            if resp.status_code == 200:
-                root = ET.fromstring(resp.content)
-                tweets = []
-                for item in root.findall("./channel/item"):
-                    guid = item.find("guid").text if item.find("guid") is not None else ""
-                    title = item.find("title").text if item.find("title") is not None else ""
-                    tweets.append((guid, title))
-                return tweets
-        except Exception:
-            continue
+def fetch_tweets_direct(username):
+    # دریافت اطلاعات از GraphQL open endpoint
+    url = f"https://cdn.syndication.twimg.com/tweet-result?id=1812154381830492416"  # تست هلدینگ
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+    # استفاده از سرویس API جایگزین و لایت
+    api_url = f"https://api.vxtwitter.com/{username}"
+    try:
+        resp = requests.get(api_url, headers=headers, timeout=8)
+        if resp.status_code == 200:
+            data = resp.json()
+            tweets = data.get("tweets", [])
+            if tweets:
+                latest = tweets[0]
+                tweet_id = latest.get("id")
+                text = latest.get("text", "")
+                return [(str(tweet_id), text)]
+    except Exception as e:
+        print(f"Error fetching @{username}: {e}")
     return []
 
 
 async def main():
-    print("🚀 Fast RSS/Nitter Solana Scanner Online...")
+    print("🚀 Fast Direct Scanner Online...")
+
+    # تست اولیه اتصال تلگرام
+    send_telegram_alert("⚙️ <b>Solana Scanner Rebooted!</b>\nسیستم فعال شد و آماده اسکن است.")
 
     while True:
         for username in SOLANA_WATCHLIST:
             try:
-                tweets = fetch_tweets_rss(username)
+                tweets = fetch_tweets_direct(username)
 
-                for tweet_id, tweet_text in tweets[:3]:
+                for tweet_id, tweet_text in tweets:
                     if not tweet_id or tweet_id in seen_tweet_ids:
                         continue
 
@@ -150,14 +150,14 @@ async def main():
                             f"{security_info}\n"
                             f"🦅 <a href='https://dexscreener.com/solana/{ca}'>DexScreener</a> | "
                             f"🧪 <a href='https://photon-sol.tinyastro.io/en/lp/{ca}'>Photon</a>\n\n"
-                            f"🔗 <a href='https://x.com/{username}'>مشاهده اکانت</a>"
+                            f"🔗 <a href='https://x.com/{username}/status/{tweet_id}'>مشاهده توییت</a>"
                         )
                         send_telegram_alert(alert_msg)
 
             except Exception as e:
                 print(f"Skip @{username}: {e}")
 
-            await asyncio.sleep(2)
+            await asyncio.sleep(3)
         await asyncio.sleep(15)
 
 

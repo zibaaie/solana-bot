@@ -95,6 +95,16 @@ def check_token_security(mint_address):
 
 async def main():
     client = Client("en-US")
+
+    # اکانت زاپاس توییتر برای احراز هویت
+    await client.login(
+        auth_info_1="synthetixtrade",  # نام کاربری توییتر (بدون @)
+        auth_info_2="zibaei.x@gmail.com",  # ایمیل اکانت
+        password="a13z48.ZIBA",  # رمز عبور
+    )
+
+    print("🚀 Solana Alpha Scanner Online...")
+    # باقی کدهای تابع main ...
     print("🚀 Solana Alpha Scanner Online...")
 
     while True:

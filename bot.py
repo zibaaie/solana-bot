@@ -2,6 +2,7 @@ import asyncio
 import os
 import re
 import requests
+import xml.etree.ElementTree as ET
 
 # ----------------- تنظیمات -----------------
 TELEGRAM_BOT_TOKEN = os.getenv(
@@ -10,6 +11,8 @@ TELEGRAM_BOT_TOKEN = os.getenv(
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "95150036")
 
 SOLANA_WATCHLIST = [
+    "SynthetixTrade",
+    "sierasfx",
     "blknoiz06",
     "LarpVonTrier",
     "artsch00lreject",
@@ -40,11 +43,16 @@ SOLANA_WATCHLIST = [
     "SolanaWhaleAlert",
     "RaydiumProtocol",
     "PhotonSolana",
-    "sierasfx",
-    "SynthetixTrade",
 ]
 
 seen_tweet_ids = set()
+
+# سرورهای عمومی RSS/Nitter جهت پشتیبان‌گیری
+NITTER_INSTANCES = [
+    "https://nitter.privacydev.net",
+    "https://nitter.poast.org",
+    "https://nitter.lucabased.xyz",
+]
 
 
 def send_telegram_alert(message):
@@ -97,42 +105,38 @@ def check_token_security(mint_address):
         return "🛡️ <b>RugCheck:</b> خطا در استعلام API"
 
 
-async def fetch_user_tweets(username):
-    url = f"https://syndication.twitter.com/srv/timeline-profile/history?screen_name={username}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-    try:
-        resp = requests.get(url, headers=headers, timeout=10)
-        if resp.status_code == 200:
-            matches = re.findall(
-                r'id_str":"(\d+)".*?"full_text":"(.*?)"', resp.text
-            )
-            return matches
-    except Exception as e:
-        print(f"Error fetching @{username}: {e}")
+def fetch_tweets_rss(username):
+    for instance in NITTER_INSTANCES:
+        url = f"{instance}/{username}/rss"
+        try:
+            resp = requests.get(url, timeout=7)
+            if resp.status_code == 200:
+                root = ET.fromstring(resp.content)
+                tweets = []
+                for item in root.findall("./channel/item"):
+                    guid = item.find("guid").text if item.find("guid") is not None else ""
+                    title = item.find("title").text if item.find("title") is not None else ""
+                    tweets.append((guid, title))
+                return tweets
+        except Exception:
+            continue
     return []
 
 
 async def main():
-    print("🚀 Solana Alpha Scanner Online (Syndication Engine)...")
+    print("🚀 Fast RSS/Nitter Solana Scanner Online...")
 
     while True:
         for username in SOLANA_WATCHLIST:
             try:
-                tweets = await fetch_user_tweets(username)
+                tweets = fetch_tweets_rss(username)
 
                 for tweet_id, tweet_text in tweets[:3]:
-                    if tweet_id in seen_tweet_ids:
+                    if not tweet_id or tweet_id in seen_tweet_ids:
                         continue
 
                     seen_tweet_ids.add(tweet_id)
-                    clean_text = (
-                        tweet_text.encode("utf-8")
-                        .decode("unicode-escape", errors="ignore")
-                        .replace("\\n", " ")
-                    )
-                    sol_contracts = extract_solana_address(clean_text)
+                    sol_contracts = extract_solana_address(tweet_text)
 
                     if sol_contracts:
                         ca = sol_contracts[0]
@@ -141,12 +145,12 @@ async def main():
                         alert_msg = (
                             f"☀️ <b>SOLANA ALPHA DETECTED!</b>\n\n"
                             f"👤 <b>Account:</b> @{username}\n"
-                            f"📝 <b>Tweet:</b> {clean_text}\n\n"
+                            f"📝 <b>Tweet:</b> {tweet_text}\n\n"
                             f"🔑 <b>Solana CA:</b>\n<code>{ca}</code>\n\n"
                             f"{security_info}\n"
                             f"🦅 <a href='https://dexscreener.com/solana/{ca}'>DexScreener</a> | "
                             f"🧪 <a href='https://photon-sol.tinyastro.io/en/lp/{ca}'>Photon</a>\n\n"
-                            f"🔗 <a href='https://x.com/{username}/status/{tweet_id}'>مشاهده توییت</a>"
+                            f"🔗 <a href='https://x.com/{username}'>مشاهده اکانت</a>"
                         )
                         send_telegram_alert(alert_msg)
 
@@ -154,7 +158,7 @@ async def main():
                 print(f"Skip @{username}: {e}")
 
             await asyncio.sleep(2)
-        await asyncio.sleep(20)
+        await asyncio.sleep(15)
 
 
 if __name__ == "__main__":

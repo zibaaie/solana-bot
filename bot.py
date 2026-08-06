@@ -1,11 +1,12 @@
 import asyncio
+import os
 import re
 import requests
 from twikit import Client
 
 # ----------------- تنظیمات -----------------
-TELEGRAM_BOT_TOKEN = "8913236446:AAG-Fx4BX86rf84OkYG3ikotS5kE4tJKbRY"
-TELEGRAM_CHAT_ID = "95150036"
+TELEGRAM_BOT_TOKEN = os.getenv("8913236446:AAG-Fx4BX86rf84OkYG3ikotS5kE4tJKbRY")
+TELEGRAM_CHAT_ID = os.getenv("95150036")
 
 SOLANA_WATCHLIST = [
     "blknoiz06",
@@ -96,15 +97,13 @@ def check_token_security(mint_address):
 async def main():
     client = Client("en-US")
 
-    # اکانت زاپاس توییتر برای احراز هویت
-    await client.login(
-        auth_info_1="synthetixtrade",  # نام کاربری توییتر (بدون @)
-        auth_info_2="zibaei.x@gmail.com",  # ایمیل اکانت
-        password="a13z48.ZIBA",  # رمز عبور
-    )
+    # بارگذاری نشست از فایل کوکی
+    if os.path.exists("cookies.json"):
+        client.load_cookies("cookies.json")
+        print("✅ Logged in via cookies.json")
+    else:
+        print("⚠️ cookies.json not found! Running in unauthenticated mode.")
 
-    print("🚀 Solana Alpha Scanner Online...")
-    # باقی کدهای تابع main ...
     print("🚀 Solana Alpha Scanner Online...")
 
     while True:

@@ -6,8 +6,10 @@ import requests
 from twikit import Client
 
 # ----------------- تنظیمات -----------------
-TELEGRAM_BOT_TOKEN = os.getenv("8913236446:AAG-Fx4BX86rf84OkYG3ikotS5kE4tJKbRY")
-TELEGRAM_CHAT_ID = os.getenv("95150036")
+TELEGRAM_BOT_TOKEN = os.getenv(
+    "TELEGRAM_BOT_TOKEN", "8913236446:AAG-Fx4BX86rf84OkYG3ikotS5kE4tJKbRY"
+)
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "95150036")
 
 SOLANA_WATCHLIST = [
     "blknoiz06",
@@ -134,8 +136,8 @@ async def main():
     while True:
         for username in SOLANA_WATCHLIST:
             try:
-                user = await client.get_user_by_screen_name(username)
-                tweets = await user.get_tweets("Tweets")
+                search_query = f"from:{username}"
+                tweets = await client.search_tweet(search_query, product="Latest")
 
                 for tweet in tweets:
                     tweet_id = getattr(tweet, "id", None)
@@ -143,7 +145,9 @@ async def main():
                         continue
 
                     seen_tweet_ids.add(tweet_id)
-                    tweet_text = getattr(tweet, "full_text", getattr(tweet, "text", ""))
+                    tweet_text = getattr(
+                        tweet, "text", getattr(tweet, "full_text", "")
+                    )
                     sol_contracts = extract_solana_address(tweet_text)
 
                     if sol_contracts:
@@ -163,10 +167,10 @@ async def main():
                         send_telegram_alert(alert_msg)
 
             except Exception as e:
-                print(f"Error scanning @{username}: {e}")
+                print(f"Skip @{username}: {e}")
 
-            await asyncio.sleep(4)
-        await asyncio.sleep(60)
+            await asyncio.sleep(5)
+        await asyncio.sleep(30)
 
 
 if __name__ == "__main__":

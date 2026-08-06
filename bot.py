@@ -40,6 +40,8 @@ SOLANA_WATCHLIST = [
     "SolanaWhaleAlert",
     "RaydiumProtocol",
     "PhotonSolana",
+    "sierasfx",
+    "SynthetixTrade",
 ]
 
 seen_tweet_ids = set()

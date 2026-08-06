@@ -1,14 +1,12 @@
-[8/6/2026 7:30 PM] Ali Zibaei: import asyncio
-import os
+import asyncio
 import re
 import requests
 from twikit import Client
 
-# ----------------- تنظیمات اختصاصی -----------------
+# ----------------- تنظیمات -----------------
 TELEGRAM_BOT_TOKEN = "8913236446:AAG-Fx4BX86rf84OkYG3ikotS5kE4tJKbRY"
 TELEGRAM_CHAT_ID = "95150036"
 
-# ----------------- لیست آلفاکالرها -----------------
 SOLANA_WATCHLIST = [
     "blknoiz06",
     "LarpVonTrier",
@@ -73,7 +71,6 @@ def check_token_security(mint_address):
         if response.status_code == 200:
             data = response.json()
             score = data.get("score", 0)
-            status = data.get("status", "Unknown")
 
             if score < 1000:
                 risk_label = "🟢 <b>Low Risk</b>"
@@ -91,16 +88,13 @@ def check_token_security(mint_address):
                 f"Score: {score} | Verdict: {risk_label}\n"
                 f"<b>Risks:</b>\n{risk_text}\n"
             )
-        return "🛡️ <b>RugCheck:</b> اطلاعات امنیت در حال بروزرسانی..."
+        return "🛡️ <b>RugCheck:</b> در حال بروزرسانی..."
     except Exception:
         return "🛡️ <b>RugCheck:</b> خطا در استعلام API"
 
 
 async def main():
     client = Client("en-US")
-    # در صورت نیاز به لاگین توییتر:
-    # await client.login(auth_info_1="username", auth_info_2="email", password="password")
-
     print("🚀 Solana Alpha Scanner Online...")
 
     while True:
@@ -126,7 +120,7 @@ async def main():
                             f"👤 <b>Account:</b> @{username}\n"
                             f"📝 <b>Tweet:</b> {tweet_text}\n\n"
                             f"🔑 <b>Solana CA:</b>\n<code>{ca}</code>\n\n"
-[8/6/2026 7:30 PM] Ali Zibaei: f"{security_info}\n"
+                            f"{security_info}\n"
                             f"🦅 <a href='https://dexscreener.com/solana/{ca}'>DexScreener</a> | "
                             f"🧪 <a href='https://photon-sol.tinyastro.io/en/lp/{ca}'>Photon</a>\n\n"
                             f"🔗 <a href='https://x.com/{username}/status/{tweet.id}'>مشاهده توییت</a>"
@@ -140,30 +134,5 @@ async def main():
         await asyncio.sleep(60)
 
 
-if name == "main":
+if __name__ == "__main__":
     asyncio.run(main())
-[8/6/2026 8:04 PM] Ali Zibaei: FROM python:3.10-slim
-WORKDIR /app
-COPY . /app
-RUN pip install --no-cache-dir -r requirements.txt
-EXPOSE 10000
-CMD ["python", "bot.py"]
-[8/6/2026 8:18 PM] Ali Zibaei: from http.server import HTTPServer, BaseHTTPRequestHandler
-import threading
-
-
-class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
-
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"Bot is running 24/7!")
-
-
-def run_dummy_server():
-    server = HTTPServer(("0.0.0.0", 10000), SimpleHTTPRequestHandler)
-    server.serve_forever()
-
-
-# اجرای سرور وب در پس‌زمینه
-threading.Thread(target=run_dummy_server, daemon=True).start()

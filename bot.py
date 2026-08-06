@@ -127,7 +127,6 @@ async def main():
                         continue
 
                     seen_tweet_ids.add(tweet_id)
-                    # پاک‌سازی Unicode و کاراکترهای اسکیپ شده
                     clean_text = (
                         tweet_text.encode("utf-8")
                         .decode("unicode-escape", errors="ignore")

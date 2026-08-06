@@ -142,3 +142,28 @@ async def main():
 
 if name == "main":
     asyncio.run(main())
+[8/6/2026 8:04 PM] Ali Zibaei: FROM python:3.10-slim
+WORKDIR /app
+COPY . /app
+RUN pip install --no-cache-dir -r requirements.txt
+EXPOSE 10000
+CMD ["python", "bot.py"]
+[8/6/2026 8:18 PM] Ali Zibaei: from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading
+
+
+class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
+
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is running 24/7!")
+
+
+def run_dummy_server():
+    server = HTTPServer(("0.0.0.0", 10000), SimpleHTTPRequestHandler)
+    server.serve_forever()
+
+
+# اجرای سرور وب در پس‌زمینه
+threading.Thread(target=run_dummy_server, daemon=True).start()

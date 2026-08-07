@@ -19,7 +19,7 @@ MIN_24H_VOLUME = 100       # حداقل حجم ۲۴ ساعته ۱۰۰ دلار
 MIN_LIQUIDITY_RATIO = 0.01 # حداقل نسبت ۱٪
 # تنظیمات Confluence (هم‌زمانی سیگنال‌ها)
 CONFLUENCE_WINDOW_SECONDS = 1800  # بازه زمانی ۳۰ دقیقه
-
+MAX_AGE_DAYS = 90  # حداکثر سن توکن (روز)
 # ----------------- لیست اکانت‌ها با مشخصات انگلیسی -----------------
 SOLANA_WATCHLIST = {
     # Top Alpha Callers & Key Influencers
@@ -109,13 +109,40 @@ def extract_tickers(text):
 def evaluate_pair(pair, mint_address):
     created_at = pair.get("pairCreatedAt", 0) / 1000.0
     age_days = (time.time() - created_at) / 86400.0 if created_at > 0 else 0
-    
+
     name = pair.get("baseToken", {}).get("name", "Unknown")
     symbol = pair.get("baseToken", {}).get("symbol", "UNKNOWN")
     market_cap = pair.get("fdv", pair.get("marketCap", 0)) or 0
     liquidity = pair.get("liquidity", {}).get("usd", 0) or 0
     volume_5m = pair.get("volume", {}).get("m5", 0) or 0
     volume_24h = pair.get("volume", {}).get("h24", 0) or 0
+
+    liq_ratio = (liquidity / market_cap) if market_cap > 0 else 0
+
+    # تعریف مستقیم برای جلوگیری از خطای متغیر تعریف‌نشده
+    max_age = globals().get("MAX_AGE_DAYS", 90)
+
+    is_valid = (
+        volume_5m >= MIN_5M_VOLUME
+        and age_days <= max_age
+        and market_cap >= MIN_MARKET_CAP
+        and liquidity >= MIN_LIQUIDITY
+        and volume_24h >= MIN_24H_VOLUME
+        and liq_ratio >= MIN_LIQUIDITY_RATIO
+    )
+
+    return {
+        "ca": mint_address,
+        "name": name,
+        "symbol": symbol,
+        "market_cap": market_cap,
+        "liquidity": liquidity,
+        "volume_5m": volume_5m,
+        "volume_24h": volume_24h,
+        "liq_ratio": round(liq_ratio * 100, 1),
+        "age_days": round(age_days, 1),
+        "valid": is_valid,
+    }
     
     liq_ratio = (liquidity / market_cap) if market_cap > 0 else 0
     

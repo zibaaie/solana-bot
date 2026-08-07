@@ -19,52 +19,61 @@ MIN_24H_VOLUME = 5000        # حداقل حجم معاملات ۲۴ ساعته 
 MIN_LIQUIDITY_RATIO = 0.10   # حداقل نسبت نقدینگی به مارکت‌کپ (۱۰٪)
 MAX_AGE_DAYS = 90            # حداکثر سن توکن (روز)
 
-# تنظیمات Confluence (هم‌زمانی سیگنال‌ها)
 CONFLUENCE_WINDOW_SECONDS = 1800  # بازه زمانی ۳۰ دقیقه
 
-# ----------------- لیست اکانت‌ها با مشخصات انگلیسی -----------------
+# ----------------- لیست اکانت‌ها -----------------
 SOLANA_WATCHLIST = {
     # Top Alpha Callers & Key Influencers
-    "blkn0iz06": "Ansem - Top Meme Callers (Fartcoin, WIF, BOME)",
+    "blkn0iz06": "Ansem - Top Meme Callers",
     "idrawfire": "Mitch - Senior Trader & Alpha Caller",
     "LarpVonTrier": "LarpVonTrier - Early Meme Alpha Finder",
     "Theunipcs": "Theunipcs - Bonk & WIF Whale Holder",
     "CrashiusClay69": "Crashius Clay - Top Solana Trader",
     "artsch00lreject": "Artschool Reject - Solana Alpha",
     "arrogantfrfr": "Arrogant - On-Chain Trader",
-    "0xVonGogh": "VonGogh - Gem Finder & Low Cap Specialist",
-    "MuroCrypto": "Muro - Price Action & Low Cap Analysis",
+    "0xVonGogh": "VonGogh - Gem Finder",
+    "MuroCrypto": "Muro - Price Action & Low Cap",
 
     # On-Chain & Smart Money Trackers
-    "lookonchain": "Lookonchain - Whale Tracker & Smart Money",
-    "bubblemaps": "Bubblemaps - Insider & Cluster Detection",
-    "OnChainDataNerd": "Onchain Data Nerd - Smart Money Analytics",
-    "SolanaFloor": "Solana Floor - Ecosystem News & Analytics",
+    "lookonchain": "Lookonchain - Whale Tracker",
+    "bubblemaps": "Bubblemaps - Insider Detection",
+    "OnChainDataNerd": "Onchain Data Nerd - Smart Money",
+    "SolanaFloor": "Solana Floor - Ecosystem News",
 
     # High-Volume Meme Callers & Channels
     "Poe_Ether": "Poe - High-Volume Meme Caller",
     "thecexoffender": "CEX Offender - Solana Meme Caller",
-    "Renzofks": "Renzo - Alpha Trader & Caller",
-    "larpalt": "Larp Alt - Secondary Alpha Account",
+    "Renzofks": "Renzo - Alpha Trader",
+    "larpalt": "Larp Alt - Secondary Alpha",
     "iambroots": "Broots - Meme Coin Caller",
     "UniswapVillain": "Uniswap Villain - On-Chain Trader",
-    "solana_daily": "Solana Daily - Daily Tokens & Ecosystem News",
-    "SOLBigBrain": "SOL Big Brain - Solana Ecosystem Analyst",
-    "MemeCoinCalls": "MemeCoin Calls - Meme Coin Signals",
-    "SolMemeAlpha": "Sol Meme Alpha - Specialized Meme Alpha",
-    "PumpFunCalls": "PumpFun Calls - Pump.fun Token Tracker",
-    "SolanaGems": "Solana Gems - High Potential Gem Finder",
-    "DegenerateNews": "Degen News - Degen Trends & News Coverage",
-    "ZackXBT": "ZachXBT - Web3 Investigator & Scam Tracker",
-    "RektFencer": "Rekt Fencer - Alpha Trader & Caller",
-    "0xFastHand": "Fast Hand - Fast On-Chain Scalper",
-    "CryptoWizardd": "Crypto Wizard - Market Analyst & Price Action",
-    "SolanaWhaleAlert": "Solana Whale Alert - Large Transfer Alerts",
-    "RaydiumProtocol": "Raydium Protocol - DEX Official Announcements",
-    "PhotonSolana": "Photon Solana - Trading Platform Alerts",
-    "SynthetixTrade": "Synthetix Trade - Personal Tracking Account",
-    "sierasfx": "sierasfx - Personal Tracking Account",
+    "solana_daily": "Solana Daily - Ecosystem News",
+    "SOLBigBrain": "SOL Big Brain - Solana Analyst",
+    "MemeCoinCalls": "MemeCoin Calls - Signals",
+    "SolMemeAlpha": "Sol Meme Alpha - Meme Alpha",
+    "PumpFunCalls": "PumpFun Calls - Pump.fun Tracker",
+    "SolanaGems": "Solana Gems - Gem Finder",
+    "DegenerateNews": "Degen News - Degen Trends",
+    "ZackXBT": "ZachXBT - Scam Tracker",
+    "RektFencer": "Rekt Fencer - Alpha Trader",
+    "0xFastHand": "Fast Hand - On-Chain Scalper",
+    "CryptoWizardd": "Crypto Wizard - Market Analyst",
+    "SolanaWhaleAlert": "Solana Whale Alert - Whale Transfers",
+    "RaydiumProtocol": "Raydium Protocol - DEX Official",
+    "PhotonSolana": "Photon Solana - Platform Alerts",
+
+    # Personal Accounts
+    "SynthetixTrade": "Synthetix Trade - Personal Account",
+    "sierasfx": "sierasfx - Personal Account"
 }
+
+# لیست سرورهای فعال جهت دریافت چرخه‌ای
+RSS_SERVERS = [
+    "https://nitter.poast.org",
+    "https://nitter.privacydev.net",
+    "https://nitter.freedit.eu",
+    "https://rsshub.app/twitter/user"
+]
 
 seen_tweet_ids = set()
 token_mentions = defaultdict(list)
@@ -83,9 +92,7 @@ async def send_telegram_alert(message):
             resp = requests.post(url, json=payload, timeout=15)
             if resp.status_code == 200:
                 break
-        except Exception as e:
-            if attempt == 2:
-                print(f"Error sending Telegram alert after 3 attempts: {e}")
+        except Exception:
             await asyncio.sleep(2)
 
 
@@ -118,12 +125,9 @@ def evaluate_pair(pair, mint_address):
 
     liq_ratio = (liquidity / market_cap) if market_cap > 0 else 0
 
-    # ارزیابی ایمن بدون وابستگی مستقیم به متغیر سراسری
-    max_age = MAX_AGE_DAYS if 'MAX_AGE_DAYS' in globals() else 90
-
     is_valid = (
         volume_5m >= MIN_5M_VOLUME
-        and age_days <= max_age
+        and age_days <= MAX_AGE_DAYS
         and market_cap >= MIN_MARKET_CAP
         and liquidity >= MIN_LIQUIDITY
         and volume_24h >= MIN_24H_VOLUME
@@ -206,21 +210,16 @@ def check_token_security(mint_address):
         return "🛡️ <b>RugCheck:</b> خطا در دریافت استعلام"
 
 
-def fetch_tweets_fast_rss(username):
-    instances = [
-        "https://nitter.poast.org",
-        "https://nitter.privacydev.net",
-        "https://nitter.net"
-    ]
+def fetch_tweets_multi_source(username):
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
-    for instance in instances:
+    for server in RSS_SERVERS:
         try:
-            url = f"{instance}/{username}/rss"
-            resp = requests.get(url, headers=headers, timeout=5)
-            if resp.status_code == 200:
+            url = f"{server}/{username}/rss" if "rsshub" not in server else f"{server}/{username}"
+            resp = requests.get(url, headers=headers, timeout=4)
+            if resp.status_code == 200 and len(resp.text) > 200:
                 text = resp.text
                 cas = extract_solana_address(text)
                 tickers = extract_tickers(text)
@@ -243,13 +242,13 @@ def check_confluence(ca, username):
 
 
 async def main():
-    print("🚀 Solana Priority 5m Volume Bot Started...")
+    print("🚀 Solana Multi-Source Free Bot Started...")
 
     while True:
         try:
             for username, user_desc in SOLANA_WATCHLIST.items():
                 try:
-                    results = fetch_tweets_fast_rss(username)
+                    results = fetch_tweets_multi_source(username)
 
                     for tweet_id, raw_text, cas, tickers in results:
                         if not tweet_id or tweet_id in seen_tweet_ids:
@@ -266,12 +265,12 @@ async def main():
                                 token_info = get_dex_info_by_ticker(filtered_tickers[0])
 
                         if token_info:
+                            seen_tweet_ids.add(tweet_id)
+
                             if not token_info["valid"]:
                                 continue
 
-                            seen_tweet_ids.add(tweet_id)
                             ca = token_info["ca"]
-                            
                             caller_count, callers_list = check_confluence(ca, username)
                             security_info = check_token_security(ca)
                             
@@ -307,11 +306,11 @@ async def main():
                 except Exception as e:
                     print(f"Error checking @{username}: {e}")
 
-                await asyncio.sleep(1.5)
+                await asyncio.sleep(0.5)
         except Exception as global_e:
             print(f"Global Loop Error: {global_e}")
         
-        await asyncio.sleep(10)
+        await asyncio.sleep(5)
 
 
 if __name__ == "__main__":

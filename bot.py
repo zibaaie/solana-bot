@@ -62,10 +62,8 @@ SOLANA_WATCHLIST = {
     "SolanaWhaleAlert": "Solana Whale Alert - Large Transfer Alerts",
     "RaydiumProtocol": "Raydium Protocol - DEX Official Announcements",
     "PhotonSolana": "Photon Solana - Trading Platform Alerts",
-
-    # Personal Accounts
     "SynthetixTrade": "Synthetix Trade - Personal Tracking Account",
-    "sierasfx": "sierasfx - Personal Tracking Account"
+    "sierasfx": "sierasfx - Personal Tracking Account",
 }
 
 seen_tweet_ids = set()

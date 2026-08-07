@@ -61,8 +61,6 @@ SOLANA_WATCHLIST = {
     "SolanaWhaleAlert": "Solana Whale Alert - Whale Transfers",
     "RaydiumProtocol": "Raydium Protocol - DEX Official",
     "PhotonSolana": "Photon Solana - Platform Alerts",
-
-    # Personal Accounts
     "SynthetixTrade": "Synthetix Trade - Personal Account",
     "sierasfx": "sierasfx - Personal Account"
 }

@@ -12,14 +12,16 @@ TELEGRAM_BOT_TOKEN = os.getenv(
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "95150036")
 
 # ----------------- فیلترهای مالی و تکنیکال -----------------
-MIN_5M_VOLUME = 0          # بدون فیلتر حجم ۵ دقیقه
-MIN_MARKET_CAP = 100       # حداقل مارکت‌کپ ۱۰۰ دلار
-MIN_LIQUIDITY = 100        # حداقل نقدینگی ۱۰۰ دلار
-MIN_24H_VOLUME = 100       # حداقل حجم ۲۴ ساعته ۱۰۰ دلار
-MIN_LIQUIDITY_RATIO = 0.01 # حداقل نسبت ۱٪
+MIN_5M_VOLUME = 1000         # حداقل حجم معاملات ۵ دقیقه اخیر (دلار)
+MIN_MARKET_CAP = 10000       # حداقل مارکت‌کپ (دلار)
+MIN_LIQUIDITY = 3000         # حداقل نقدینگی (دلار)
+MIN_24H_VOLUME = 5000        # حداقل حجم معاملات ۲۴ ساعته (دلار)
+MIN_LIQUIDITY_RATIO = 0.10   # حداقل نسبت نقدینگی به مارکت‌کپ (۱۰٪)
+MAX_AGE_DAYS = 90            # حداکثر سن توکن (روز)
+
 # تنظیمات Confluence (هم‌زمانی سیگنال‌ها)
 CONFLUENCE_WINDOW_SECONDS = 1800  # بازه زمانی ۳۰ دقیقه
-MAX_AGE_DAYS = 90  # حداکثر سن توکن (روز)
+
 # ----------------- لیست اکانت‌ها با مشخصات انگلیسی -----------------
 SOLANA_WATCHLIST = {
     # Top Alpha Callers & Key Influencers
@@ -78,7 +80,6 @@ async def send_telegram_alert(message):
         "parse_mode": "HTML",
         "disable_web_page_preview": True,
     }
-    # تلاش مجدد ۳ باره غیربلاک‌کننده با تایم‌اوت ۱۵ ثانیه
     for attempt in range(3):
         try:
             resp = requests.post(url, json=payload, timeout=15)
@@ -119,8 +120,8 @@ def evaluate_pair(pair, mint_address):
 
     liq_ratio = (liquidity / market_cap) if market_cap > 0 else 0
 
-    # تعریف مستقیم برای جلوگیری از خطای متغیر تعریف‌نشده
-    max_age = globals().get("MAX_AGE_DAYS", 90)
+    # ارزیابی ایمن بدون وابستگی مستقیم به متغیر سراسری
+    max_age = MAX_AGE_DAYS if 'MAX_AGE_DAYS' in globals() else 90
 
     is_valid = (
         volume_5m >= MIN_5M_VOLUME
@@ -142,31 +143,6 @@ def evaluate_pair(pair, mint_address):
         "liq_ratio": round(liq_ratio * 100, 1),
         "age_days": round(age_days, 1),
         "valid": is_valid,
-    }
-    
-    liq_ratio = (liquidity / market_cap) if market_cap > 0 else 0
-    
-    # ارزیابی بر اساس اولویت حجم ۵ دقیقه و مابقی فیلترها
-    is_valid = (
-        volume_5m >= MIN_5M_VOLUME and
-        age_days <= MAX_AGE_DAYS and
-        market_cap >= MIN_MARKET_CAP and
-        liquidity >= MIN_LIQUIDITY and
-        volume_24h >= MIN_24H_VOLUME and
-        liq_ratio >= MIN_LIQUIDITY_RATIO
-    )
-    
-    return {
-        "ca": mint_address,
-        "name": name,
-        "symbol": symbol,
-        "market_cap": market_cap,
-        "liquidity": liquidity,
-        "volume_5m": volume_5m,
-        "volume_24h": volume_24h,
-        "liq_ratio": round(liq_ratio * 100, 1),
-        "age_days": round(age_days, 1),
-        "valid": is_valid
     }
 
 

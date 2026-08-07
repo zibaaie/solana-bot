@@ -12,13 +12,11 @@ TELEGRAM_BOT_TOKEN = os.getenv(
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "95150036")
 
 # ----------------- فیلترهای مالی و تکنیکال -----------------
-MIN_5M_VOLUME = 1000         # حداقل حجم معاملات ۵ دقیقه اخیر (دلار) - اولویت اصلی
-MIN_MARKET_CAP = 10000       # حداقل مارکت‌کپ (دلار)
-MIN_LIQUIDITY = 3000         # حداقل نقدینگی (دلار)
-MIN_24H_VOLUME = 5000        # حداقل حجم معاملات ۲۴ ساعته (دلار)
-MIN_LIQUIDITY_RATIO = 0.10   # حداقل نسبت نقدینگی به مارکت‌کپ (۱۰٪)
-MAX_AGE_DAYS = 90            # حداکثر سن توکن (روز)
-
+MIN_5M_VOLUME = 0          # بدون فیلتر حجم ۵ دقیقه
+MIN_MARKET_CAP = 100       # حداقل مارکت‌کپ ۱۰۰ دلار
+MIN_LIQUIDITY = 100        # حداقل نقدینگی ۱۰۰ دلار
+MIN_24H_VOLUME = 100       # حداقل حجم ۲۴ ساعته ۱۰۰ دلار
+MIN_LIQUIDITY_RATIO = 0.01 # حداقل نسبت ۱٪
 # تنظیمات Confluence (هم‌زمانی سیگنال‌ها)
 CONFLUENCE_WINDOW_SECONDS = 1800  # بازه زمانی ۳۰ دقیقه
 

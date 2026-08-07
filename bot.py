@@ -5,14 +5,14 @@ import time
 from collections import defaultdict
 import requests
 
-# ----------------- تنظیمات -----------------
+# ----------------- تنظیمات متغیرهای محیطی -----------------
 TELEGRAM_BOT_TOKEN = os.getenv(
     "TELEGRAM_BOT_TOKEN", "8913236446:AAG-Fx4BX86rf84OkYG3ikotS5kE4tJKbRY"
 )
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "95150036")
 
-# فیلترهای مالی و تکنیکال (اولویت با حجم ۵ دقیقه)
-MIN_5M_VOLUME = 1000         # حداقل حجم معاملات ۵ دقیقه اخیر (دلار)
+# ----------------- فیلترهای مالی و تکنیکال -----------------
+MIN_5M_VOLUME = 1000         # حداقل حجم معاملات ۵ دقیقه اخیر (دلار) - اولویت اصلی
 MIN_MARKET_CAP = 10000       # حداقل مارکت‌کپ (دلار)
 MIN_LIQUIDITY = 3000         # حداقل نقدینگی (دلار)
 MIN_24H_VOLUME = 5000        # حداقل حجم معاملات ۲۴ ساعته (دلار)
@@ -22,57 +22,57 @@ MAX_AGE_DAYS = 90            # حداکثر سن توکن (روز)
 # تنظیمات Confluence (هم‌زمانی سیگنال‌ها)
 CONFLUENCE_WINDOW_SECONDS = 1800  # بازه زمانی ۳۰ دقیقه
 
-# لیست نهایی اکانت‌های تحت نظر
-SOLANA_WATCHLIST = [
+# ----------------- لیست اکانت‌ها با مشخصات انگلیسی -----------------
+SOLANA_WATCHLIST = {
     # Top Alpha Callers & Key Influencers
-    "blkn0iz06",       # Ansem
-    "idrawfire",       # Mitch
-    "LarpVonTrier",    # Early Meme Alpha
-    "Theunipcs",       # Bonk & WIF Whale
-    "CrashiusClay69",  # Top Solana Trader
-    "artsch00lreject", # Solana Alpha
-    "arrogantfrfr",    # On-chain Trader
-    "0xVonGogh",       # Gem Finder
-    "MuroCrypto",      # Price Action & Low Cap
-    
+    "blkn0iz06": "Ansem - Top Meme Callers (Fartcoin, WIF, BOME)",
+    "idrawfire": "Mitch - Senior Trader & Alpha Caller",
+    "LarpVonTrier": "LarpVonTrier - Early Meme Alpha Finder",
+    "Theunipcs": "Theunipcs - Bonk & WIF Whale Holder",
+    "CrashiusClay69": "Crashius Clay - Top Solana Trader",
+    "artsch00lreject": "Artschool Reject - Solana Alpha",
+    "arrogantfrfr": "Arrogant - On-Chain Trader",
+    "0xVonGogh": "VonGogh - Gem Finder & Low Cap Specialist",
+    "MuroCrypto": "Muro - Price Action & Low Cap Analysis",
+
     # On-Chain & Smart Money Trackers
-    "lookonchain",     # Whale Tracker
-    "bubblemaps",      # Insider & Cluster Detection
-    "OnChainDataNerd", # Smart Money Analytics
-    "SolanaFloor",     # Ecosystem News
-    
-    # High-Volume Meme Callers
-    "Poe_Ether",
-    "thecexoffender",
-    "Renzofks",
-    "larpalt",
-    "iambroots",
-    "UniswapVillain",
-    "solana_daily",
-    "SOLBigBrain",
-    "MemeCoinCalls",
-    "SolMemeAlpha",
-    "PumpFunCalls",
-    "SolanaGems",
-    "DegenerateNews",
-    "ZackXBT",
-    "RektFencer",
-    "0xFastHand",
-    "CryptoWizardd",
-    "SolanaWhaleAlert",
-    "RaydiumProtocol",
-    "PhotonSolana",
+    "lookonchain": "Lookonchain - Whale Tracker & Smart Money",
+    "bubblemaps": "Bubblemaps - Insider & Cluster Detection",
+    "OnChainDataNerd": "Onchain Data Nerd - Smart Money Analytics",
+    "SolanaFloor": "Solana Floor - Ecosystem News & Analytics",
+
+    # High-Volume Meme Callers & Channels
+    "Poe_Ether": "Poe - High-Volume Meme Caller",
+    "thecexoffender": "CEX Offender - Solana Meme Caller",
+    "Renzofks": "Renzo - Alpha Trader & Caller",
+    "larpalt": "Larp Alt - Secondary Alpha Account",
+    "iambroots": "Broots - Meme Coin Caller",
+    "UniswapVillain": "Uniswap Villain - On-Chain Trader",
+    "solana_daily": "Solana Daily - Daily Tokens & Ecosystem News",
+    "SOLBigBrain": "SOL Big Brain - Solana Ecosystem Analyst",
+    "MemeCoinCalls": "MemeCoin Calls - Meme Coin Signals",
+    "SolMemeAlpha": "Sol Meme Alpha - Specialized Meme Alpha",
+    "PumpFunCalls": "PumpFun Calls - Pump.fun Token Tracker",
+    "SolanaGems": "Solana Gems - High Potential Gem Finder",
+    "DegenerateNews": "Degen News - Degen Trends & News Coverage",
+    "ZackXBT": "ZachXBT - Web3 Investigator & Scam Tracker",
+    "RektFencer": "Rekt Fencer - Alpha Trader & Caller",
+    "0xFastHand": "Fast Hand - Fast On-Chain Scalper",
+    "CryptoWizardd": "Crypto Wizard - Market Analyst & Price Action",
+    "SolanaWhaleAlert": "Solana Whale Alert - Large Transfer Alerts",
+    "RaydiumProtocol": "Raydium Protocol - DEX Official Announcements",
+    "PhotonSolana": "Photon Solana - Trading Platform Alerts",
 
     # Personal Accounts
-    "SynthetixTrade",
-    "sierasfx"
-]
+    "SynthetixTrade": "Synthetix Trade - Personal Tracking Account",
+    "sierasfx": "sierasfx - Personal Tracking Account"
+}
 
 seen_tweet_ids = set()
 token_mentions = defaultdict(list)
 
 
-def send_telegram_alert(message):
+async def send_telegram_alert(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
@@ -80,7 +80,7 @@ def send_telegram_alert(message):
         "parse_mode": "HTML",
         "disable_web_page_preview": True,
     }
-    # ۳ بار تلاش مجدد در صورت کندی شبکه
+    # تلاش مجدد ۳ باره غیربلاک‌کننده با تایم‌اوت ۱۵ ثانیه
     for attempt in range(3):
         try:
             resp = requests.post(url, json=payload, timeout=15)
@@ -89,7 +89,7 @@ def send_telegram_alert(message):
         except Exception as e:
             if attempt == 2:
                 print(f"Error sending Telegram alert after 3 attempts: {e}")
-            time.sleep(2)
+            await asyncio.sleep(2)
 
 
 def extract_solana_address(text):
@@ -121,7 +121,7 @@ def evaluate_pair(pair, mint_address):
     
     liq_ratio = (liquidity / market_cap) if market_cap > 0 else 0
     
-    # بررسی تمام فیلترها با اولویت حجم ۵ دقیقه
+    # ارزیابی بر اساس اولویت حجم ۵ دقیقه و مابقی فیلترها
     is_valid = (
         volume_5m >= MIN_5M_VOLUME and
         age_days <= MAX_AGE_DAYS and
@@ -173,7 +173,6 @@ def get_dex_info_by_ticker(ticker):
                 if p.get("chainId") == "solana" and 
                 p.get("baseToken", {}).get("symbol", "").upper() == ticker.upper()
             ]
-            
             if sol_pairs:
                 sol_pairs.sort(key=lambda x: x.get("liquidity", {}).get("usd", 0), reverse=True)
                 mint_address = sol_pairs[0].get("baseToken", {}).get("address")
@@ -245,77 +244,74 @@ def check_confluence(ca, username):
 
 
 async def main():
-    print("🚀 Priority 5m Volume Solana Bot Started...")
-    send_telegram_alert(
-        f"⚡ <b>5m Volume Priority Bot Online!</b>\n"
-        f"• حداقل حجم ۵ دقیقه: ${MIN_5M_VOLUME:,}\n"
-        f"• حداقل مارکت‌کپ: ${MIN_MARKET_CAP:,}\n"
-        f"• حداقل نقدینگی: ${MIN_LIQUIDITY:,}\n"
-        f"• فیلترها و Confluence: فعال"
-    )
+    print("🚀 Solana Priority 5m Volume Bot Started...")
 
     while True:
-        for username in SOLANA_WATCHLIST:
-            try:
-                results = fetch_tweets_fast_rss(username)
+        try:
+            for username, user_desc in SOLANA_WATCHLIST.items():
+                try:
+                    results = fetch_tweets_fast_rss(username)
 
-                for tweet_id, raw_text, cas, tickers in results:
-                    if not tweet_id or tweet_id in seen_tweet_ids:
-                        continue
-
-                    token_info = None
-
-                    if cas:
-                        token_info = get_dex_info_by_ca(cas[0])
-                    elif tickers:
-                        ignored = ["SOL", "USDC", "USDT", "BTC", "ETH"]
-                        filtered_tickers = [t for t in tickers if t.upper() not in ignored]
-                        if filtered_tickers:
-                            token_info = get_dex_info_by_ticker(filtered_tickers[0])
-
-                    if token_info:
-                        if not token_info["valid"]:
+                    for tweet_id, raw_text, cas, tickers in results:
+                        if not tweet_id or tweet_id in seen_tweet_ids:
                             continue
 
-                        seen_tweet_ids.add(tweet_id)
-                        ca = token_info["ca"]
-                        
-                        caller_count, callers_list = check_confluence(ca, username)
-                        security_info = check_token_security(ca)
-                        
-                        mc_formatted = f"${token_info['market_cap']:,.0f}" if token_info['market_cap'] else "N/A"
-                        liq_formatted = f"${token_info['liquidity']:,.0f}" if token_info['liquidity'] else "N/A"
-                        vol_5m_formatted = f"${token_info['volume_5m']:,.0f}" if token_info['volume_5m'] else "N/A"
-                        vol_24h_formatted = f"${token_info['volume_24h']:,.0f}" if token_info['volume_24h'] else "N/A"
+                        token_info = None
 
-                        if caller_count > 1:
-                            header = f"🔥 <b>HOT CONFLUENCE DETECTED! ({caller_count} Callers)</b>"
-                            callers_str = ", ".join([f"@{c}" for c in callers_list])
-                        else:
-                            header = "☀️ <b>SOLANA ALPHA DETECTED!</b>"
-                            callers_str = f"@{username}"
+                        if cas:
+                            token_info = get_dex_info_by_ca(cas[0])
+                        elif tickers:
+                            ignored = ["SOL", "USDC", "USDT", "BTC", "ETH"]
+                            filtered_tickers = [t for t in tickers if t.upper() not in ignored]
+                            if filtered_tickers:
+                                token_info = get_dex_info_by_ticker(filtered_tickers[0])
 
-                        alert_msg = (
-                            f"{header}\n\n"
-                            f"👥 <b>Callers:</b> {callers_str}\n"
-                            f"🪙 <b>Token:</b> {token_info['name']} (${token_info['symbol']})\n"
-                            f"⚡ <b>5m Volume:</b> {vol_5m_formatted}\n"
-                            f"📊 <b>Market Cap:</b> {mc_formatted}\n"
-                            f"💧 <b>Liquidity:</b> {liq_formatted} (نسبت: {token_info['liq_ratio']}%)\n"
-                            f"📈 <b>24h Volume:</b> {vol_24h_formatted}\n"
-                            f"⏳ <b>Age:</b> {token_info['age_days']} روز\n\n"
-                            f"🔑 <b>Solana CA:</b>\n<code>{ca}</code>\n\n"
-                            f"{security_info}\n\n"
-                            f"🦅 <a href='https://dexscreener.com/solana/{ca}'>DexScreener</a> | "
-                            f"🧪 <a href='https://photon-sol.tinyastro.io/en/lp/{ca}'>Photon</a>\n"
-                            f"🔗 <a href='https://x.com/{username}'>مشاهده اکانت</a>"
-                        )
-                        send_telegram_alert(alert_msg)
+                        if token_info:
+                            if not token_info["valid"]:
+                                continue
 
-            except Exception as e:
-                print(f"Error checking @{username}: {e}")
+                            seen_tweet_ids.add(tweet_id)
+                            ca = token_info["ca"]
+                            
+                            caller_count, callers_list = check_confluence(ca, username)
+                            security_info = check_token_security(ca)
+                            
+                            mc_formatted = f"${token_info['market_cap']:,.0f}" if token_info['market_cap'] else "N/A"
+                            liq_formatted = f"${token_info['liquidity']:,.0f}" if token_info['liquidity'] else "N/A"
+                            vol_5m_formatted = f"${token_info['volume_5m']:,.0f}" if token_info['volume_5m'] else "N/A"
+                            vol_24h_formatted = f"${token_info['volume_24h']:,.0f}" if token_info['volume_24h'] else "N/A"
 
-            await asyncio.sleep(1.5)
+                            if caller_count > 1:
+                                header = f"🔥 <b>HOT CONFLUENCE DETECTED! ({caller_count} Callers)</b>"
+                                callers_str = ", ".join([f"@{c}" for c in callers_list])
+                            else:
+                                header = "☀️ <b>SOLANA ALPHA DETECTED!</b>"
+                                callers_str = f"@{username} ({user_desc})"
+
+                            alert_msg = (
+                                f"{header}\n\n"
+                                f"👥 <b>Callers:</b> {callers_str}\n"
+                                f"🪙 <b>Token:</b> {token_info['name']} (${token_info['symbol']})\n"
+                                f"⚡ <b>5m Volume:</b> {vol_5m_formatted}\n"
+                                f"📊 <b>Market Cap:</b> {mc_formatted}\n"
+                                f"💧 <b>Liquidity:</b> {liq_formatted} (نسبت: {token_info['liq_ratio']}%)\n"
+                                f"📈 <b>24h Volume:</b> {vol_24h_formatted}\n"
+                                f"⏳ <b>Age:</b> {token_info['age_days']} روز\n\n"
+                                f"🔑 <b>Solana CA:</b>\n<code>{ca}</code>\n\n"
+                                f"{security_info}\n\n"
+                                f"🦅 <a href='https://dexscreener.com/solana/{ca}'>DexScreener</a> | "
+                                f"🧪 <a href='https://photon-sol.tinyastro.io/en/lp/{ca}'>Photon</a>\n"
+                                f"🔗 <a href='https://x.com/{username}'>مشاهده اکانت</a>"
+                            )
+                            await send_telegram_alert(alert_msg)
+
+                except Exception as e:
+                    print(f"Error checking @{username}: {e}")
+
+                await asyncio.sleep(1.5)
+        except Exception as global_e:
+            print(f"Global Loop Error: {global_e}")
+        
         await asyncio.sleep(10)
 
 

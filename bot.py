@@ -80,10 +80,16 @@ def send_telegram_alert(message):
         "parse_mode": "HTML",
         "disable_web_page_preview": True,
     }
-    try:
-        requests.post(url, json=payload, timeout=5)
-    except Exception as e:
-        print(f"Error sending Telegram alert: {e}")
+    # ۳ بار تلاش مجدد در صورت کندی شبکه
+    for attempt in range(3):
+        try:
+            resp = requests.post(url, json=payload, timeout=15)
+            if resp.status_code == 200:
+                break
+        except Exception as e:
+            if attempt == 2:
+                print(f"Error sending Telegram alert after 3 attempts: {e}")
+            time.sleep(2)
 
 
 def extract_solana_address(text):

@@ -2,24 +2,22 @@ import asyncio
 import os
 import re
 import time
-from bs4 import BeautifulSoup
 import requests
 
-# ----------------- تنظیمات متغیرهای محیطی -----------------
+# ----------------- تنظیمات -----------------
 TELEGRAM_BOT_TOKEN = os.getenv(
     "TELEGRAM_BOT_TOKEN", "8913236446:AAG-Fx4BX86rf84OkYG3ikotS5kE4tJKbRY"
 )
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "95150036")
 
-# ----------------- فیلترهای مالی و تکنیکال -----------------
-MIN_5M_VOLUME = 1000         # حداقل حجم ۵ دقیقه (دلار)
-MIN_MARKET_CAP = 10000       # حداقل مارکت‌کپ (دلار)
-MIN_LIQUIDITY = 3000         # حداقل نقدینگی (دلار)
-MIN_24H_VOLUME = 5000        # حداقل حجم ۲۴ ساعته (دلار)
-MIN_LIQUIDITY_RATIO = 0.10   # حداقل نسبت نقدینگی به مارکت‌کپ (۱۰٪)
-MAX_AGE_DAYS = 90            # حداکثر سن توکن (روز)
+# ----------------- فیلترها (جهت تست مقادیر کم شده‌اند) -----------------
+MIN_5M_VOLUME = 100         # دلار
+MIN_MARKET_CAP = 1000       # دلار
+MIN_LIQUIDITY = 500         # دلار
+MIN_24H_VOLUME = 1000       # دلار
+MIN_LIQUIDITY_RATIO = 0.05  # ۵ درصد
+MAX_AGE_DAYS = 90           # روز
 
-# ----------------- لیست اکانت‌ها -----------------
 SOLANA_WATCHLIST = [
     "SynthetixTrade",
     "sierasfx",
@@ -89,7 +87,6 @@ def extract_tickers(text):
 
 
 def evaluate_dex_pair(pair, mint_address):
-    """اعمال فیلترها روی دیتای استخراج شده"""
     created_at = pair.get("pairCreatedAt", 0) / 1000.0
     age_days = (time.time() - created_at) / 86400.0 if created_at > 0 else 0
 
@@ -188,46 +185,45 @@ def check_token_security(mint_address):
         return "🛡️ <b>RugCheck:</b> خطا در دریافت استعلام"
 
 
-def fetch_tweets_syndication(username):
-    url = f"https://syndication.twitter.com/srv/timeline-profile/history?screen_name={username}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-    }
+def fetch_latest_tweet_fxtwitter(username):
+    """دریافت آخرین توئیت از سرویس FxTwitter"""
+    url = f"https://api.fxtwitter.com/{username}"
+    headers = {"User-Agent": "Mozilla/5.0"}
 
     try:
-        resp = requests.get(url, headers=headers, timeout=8)
+        resp = requests.get(url, headers=headers, timeout=6)
         if resp.status_code == 200:
-            # پارس کردن HTML جهت استخراج متن خالص توئیت‌ها
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            text_content = soup.get_text()
+            data = resp.json()
+            tweet = data.get("tweet", {})
+            tweet_id = tweet.get("id")
+            text = tweet.get("text", "")
 
-            cas = extract_solana_address(text_content)
-            tickers = extract_tickers(text_content)
-
-            if cas or tickers:
-                tweet_id = f"{username}_{hash(text_content[:300])}"
-                return [(tweet_id, text_content, cas, tickers)]
+            if text and tweet_id:
+                cas = extract_solana_address(text)
+                tickers = extract_tickers(text)
+                return [(f"{username}_{tweet_id}", text, cas, tickers)]
     except Exception as e:
-        print(f"Syndication Error for @{username}: {e}")
+        print(f"FxTwitter API Error for @{username}: {e}")
     return []
 
 
 async def main():
-    print("🚀 Solana Alpha Scanner Online...")
+    print("🚀 Solana Alpha Scanner (FxTwitter Engine) Online...")
     send_telegram_alert(
-        "⚡ <b>Solana Pro Scanner Online!</b>\nسیستم دریافت اطلاعات و فیلترهای نقدینگی فعال شد."
+        "⚡ <b>Solana Pro Scanner Online!</b>\nموتور FxTwitter فعال شد."
     )
 
     while True:
         for username in SOLANA_WATCHLIST:
             try:
-                results = fetch_tweets_syndication(username)
+                print(f"🔍 Checking @{username}...")
+                results = fetch_latest_tweet_fxtwitter(username)
 
                 for tweet_id, raw_text, cas, tickers in results:
                     if not tweet_id or tweet_id in seen_tweet_ids:
                         continue
 
+                    print(f"📌 New Tweet Found from @{username}: CAS={cas}, Tickers={tickers}")
                     token_info = None
 
                     if cas:
@@ -242,12 +238,13 @@ async def main():
 
                     if token_info:
                         if not token_info["valid"]:
+                            print(f"⚠️ Token {token_info['symbol']} failed filters.")
                             continue
 
                         seen_tweet_ids.add(tweet_id)
                         ca = token_info["ca"]
                         security_info = check_token_security(ca)
-                        
+
                         mc_formatted = f"${token_info['market_cap']:,.0f}" if token_info["market_cap"] else "N/A"
                         liq_formatted = f"${token_info['liquidity']:,.0f}" if token_info["liquidity"] else "N/A"
                         vol_5m_formatted = f"${token_info['volume_5m']:,.0f}" if token_info["volume_5m"] else "N/A"
@@ -272,7 +269,7 @@ async def main():
                 print(f"Error checking @{username}: {e}")
 
             await asyncio.sleep(2.0)
-        await asyncio.sleep(10)
+        await asyncio.sleep(15)
 
 
 if __name__ == "__main__":

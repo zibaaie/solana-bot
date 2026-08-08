@@ -10,13 +10,13 @@ TELEGRAM_BOT_TOKEN = os.getenv(
 )
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "95150036")
 
-# ----------------- فیلترهای مالی و تکنیکال -----------------
-MIN_5M_VOLUME = 1000         # حداقل حجم ۵ دقیقه اخیر (دلار)
-MIN_MARKET_CAP = 10000       # حداقل مارکت‌کپ (دلار)
-MIN_LIQUIDITY = 3000         # حداقل نقدینگی (دلار)
-MIN_24H_VOLUME = 5000        # حداقل حجم ۲۴ ساعته (دلار)
-MIN_LIQUIDITY_RATIO = 0.10   # حداقل نسبت نقدینگی به مارکت‌کپ (۱۰٪)
-MAX_AGE_DAYS = 90            # حداکثر سن توکن (روز)
+# ----------------- فیلترها (جهت دریافت همه سیگنال‌ها روی 0 تنظیم شده‌اند) -----------------
+MIN_5M_VOLUME = 0            # حداقل حجم ۵ دقیقه
+MIN_MARKET_CAP = 0           # حداقل مارکت‌کپ
+MIN_LIQUIDITY = 0            # حداقل نقدینگی
+MIN_24H_VOLUME = 0           # حداقل حجم ۲۴ ساعته
+MIN_LIQUIDITY_RATIO = 0.0    # حداقل نسبت نقدینگی
+MAX_AGE_DAYS = 365           # حداکثر سن توکن (روز)
 
 SOLANA_WATCHLIST = {
     # Top Alpha Callers & Key Influencers
@@ -75,7 +75,8 @@ def send_telegram_alert(message):
         "disable_web_page_preview": True,
     }
     try:
-        requests.post(url, json=payload, timeout=5)
+        resp = requests.post(url, json=payload, timeout=5)
+        print(f"Telegram response status: {resp.status_code}")
     except Exception as e:
         print(f"Error sending Telegram alert: {e}")
 
@@ -119,7 +120,6 @@ def check_token_security(mint_address):
 
 
 def get_token_data_and_evaluate(ca):
-    """دریافت دیتای بازار و ارزیابی فیلترهای مالی"""
     url = f"https://api.dexscreener.com/latest/dex/tokens/{ca}"
     try:
         resp = requests.get(url, timeout=5)
@@ -163,12 +163,12 @@ def get_token_data_and_evaluate(ca):
                         "liq_ratio": round(liq_ratio * 100, 1),
                         "age_days": round(age_days, 1),
                         "valid": is_valid,
+                        "found": True
                     }
     except Exception as e:
         print(f"Error fetching DexScreener data for {ca}: {e}")
     
-    # اگر توکن در DexScreener پیدا نشود، غیرفعال بازگردانده می‌شود تا پیام‌های خالی فرستاده نشوند
-    return {"valid": False, "market_cap": 0, "liquidity": 0, "volume_5m": 0, "symbol": "UNKNOWN", "age_days": 0}
+    return {"valid": True, "found": False, "market_cap": 0, "liquidity": 0, "volume_5m": 0, "symbol": "NEW_TOKEN", "age_days": 0}
 
 
 def fetch_tweets_fast_rss(username):
@@ -215,7 +215,7 @@ def fetch_tweets_fast_rss(username):
 async def main():
     print("🚀 Instant Solana Scanner Engine Started...")
     send_telegram_alert(
-        "⚡ <b>Instant Scanner Active!</b>\nلیست ادغام شد و فیلتر عدم ارسال توکن‌های بدون دیتا فعال گردید."
+        "⚡ <b>Instant Scanner Active!</b>\nسیستم فعال شد و تمام محدودیت‌ها جهت تست برداشته شدند."
     )
 
     while True:
@@ -227,23 +227,15 @@ async def main():
                     if not tweet_id or tweet_id in seen_tweet_ids:
                         continue
 
-                    # دریافت دیتای بازار و ارزیابی شروط مالی
                     token_info = get_token_data_and_evaluate(ca)
 
-                    # چک کردن شرط صحت: اگر توکن فیلترها را پاس نکند یا دیتای DexScreener نداشته باشد، رد می‌شود
-                    if not token_info or not token_info.get("valid", False):
-                        print(
-                            f"⚠️ Token {ca} from @{username} failed financial filters or has no Dex data."
-                        )
-                        seen_tweet_ids.add(tweet_id)
-                        continue
-
+                    # ثبت آیدی توئیت
                     seen_tweet_ids.add(tweet_id)
                     security_info = check_token_security(ca)
 
-                    mc_formatted = f"${token_info['market_cap']:,.0f}"
-                    liq_formatted = f"${token_info['liquidity']:,.0f}"
-                    vol5m_formatted = f"${token_info['volume_5m']:,.0f}"
+                    mc_formatted = f"${token_info['market_cap']:,.0f}" if token_info["found"] else "N/A"
+                    liq_formatted = f"${token_info['liquidity']:,.0f}" if token_info["found"] else "N/A"
+                    vol5m_formatted = f"${token_info['volume_5m']:,.0f}" if token_info["found"] else "N/A"
                     symbol = token_info["symbol"]
 
                     alert_msg = (

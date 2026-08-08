@@ -10,14 +10,6 @@ TELEGRAM_BOT_TOKEN = os.getenv(
 )
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "95150036")
 
-# ----------------- فیلترهای مالی و تکنیکال -----------------
-MIN_5M_VOLUME = 50           # حداقل حجم ۵ دقیقه اخیر (دلار)
-MIN_MARKET_CAP = 1000        # حداقل مارکت‌کپ (دلار)
-MIN_LIQUIDITY = 500          # حداقل نقدینگی (دلار)
-MIN_24H_VOLUME = 500         # حداقل حجم ۲۴ ساعته (دلار)
-MIN_LIQUIDITY_RATIO = 0.02   # حداقل نسبت نقدینگی به مارکت‌کپ (۲٪)
-MAX_AGE_DAYS = 90            # حداکثر سن توکن (روز)
-
 # ----------------- لیست اکانت‌های تحت نظر -----------------
 SOLANA_WATCHLIST = {
     # Top Alpha Callers & Key Influencers
@@ -117,7 +109,7 @@ def check_token_security(mint_address):
         return "🛡️ <b>RugCheck:</b> خطا در استعلام API"
 
 
-def get_token_data_and_evaluate(ca):
+def get_token_data(ca):
     url = f"https://api.dexscreener.com/latest/dex/tokens/{ca}"
     try:
         resp = requests.get(url, timeout=5)
@@ -138,35 +130,27 @@ def get_token_data_and_evaluate(ca):
                     market_cap = pair.get("fdv", pair.get("marketCap", 0)) or 0
                     liquidity = pair.get("liquidity", {}).get("usd", 0) or 0
                     volume_5m = pair.get("volume", {}).get("m5", 0) or 0
-                    volume_24h = pair.get("volume", {}).get("h24", 0) or 0
-
-                    liq_ratio = (liquidity / market_cap) if market_cap > 0 else 0
-
-                    is_valid = (
-                        volume_5m >= MIN_5M_VOLUME
-                        and age_days <= MAX_AGE_DAYS
-                        and market_cap >= MIN_MARKET_CAP
-                        and liquidity >= MIN_LIQUIDITY
-                        and volume_24h >= MIN_24H_VOLUME
-                        and liq_ratio >= MIN_LIQUIDITY_RATIO
-                    )
 
                     return {
                         "name": name,
                         "symbol": symbol,
-                        "market_cap": market_cap,
-                        "liquidity": liquidity,
-                        "volume_5m": volume_5m,
-                        "volume_24h": volume_24h,
-                        "liq_ratio": round(liq_ratio * 100, 1),
+                        "market_cap": f"${market_cap:,.0f}",
+                        "liquidity": f"${liquidity:,.0f}",
+                        "volume_5m": f"${volume_5m:,.0f}",
                         "age_days": round(age_days, 1),
-                        "valid": is_valid,
                     }
     except Exception as e:
         print(f"Error fetching DexScreener data for {ca}: {e}")
     
-    # اگر توکن در DexScreener ایندکس نشده باشد یا دیتای آن موجود نباشد، رد می‌شود
-    return {"valid": False}
+    # مقادیر پیش‌فرض برای توکن‌های کاملاً جدید بدون جفت‌ارز در DexScreener
+    return {
+        "name": "Unknown",
+        "symbol": "NEW_TOKEN",
+        "market_cap": "N/A",
+        "liquidity": "N/A",
+        "volume_5m": "N/A",
+        "age_days": "N/A",
+    }
 
 
 def fetch_tweets_fast_rss(username):
@@ -213,7 +197,7 @@ def fetch_tweets_fast_rss(username):
 async def main():
     print("🚀 Instant Solana Scanner Engine Started...")
     send_telegram_alert(
-        "⚡ <b>Instant Scanner Active!</b>\nربات با موفقیت دیپلوی و آماده پردازش سیگنال‌ها شد."
+        "⚡ <b>Instant Scanner Active!</b>\nفیلترها کاملاً حذف شدند. همه آلارم‌ها بدون استثنا ارسال می‌شوند."
     )
 
     while True:
@@ -225,32 +209,20 @@ async def main():
                     if not tweet_id or tweet_id in seen_tweet_ids:
                         continue
 
-                    # دریافت دیتای بازار و ارزیابی شروط مالی
-                    token_info = get_token_data_and_evaluate(ca)
-
-                    # چک کردن شرط صحت: اگر توکن فیلترها را پاس نکند یا دیتای DexScreener نداشته باشد، رد می‌شود
-                    if not token_info or not token_info.get("valid", False):
-                        print(
-                            f"⚠️ Token {ca} from @{username} failed financial filters or has no Dex data."
-                        )
-                        seen_tweet_ids.add(tweet_id)
-                        continue
-
+                    # علامت‌گذاری توئیت برای عدم ارسال تکراری
                     seen_tweet_ids.add(tweet_id)
-                    security_info = check_token_security(ca)
 
-                    mc_formatted = f"${token_info['market_cap']:,.0f}"
-                    liq_formatted = f"${token_info['liquidity']:,.0f}"
-                    vol5m_formatted = f"${token_info['volume_5m']:,.0f}"
-                    symbol = token_info["symbol"]
+                    # دریافت اطلاعات توکن (حتی اگر نود DexScreener نداشته باشد)
+                    token_info = get_token_data(ca)
+                    security_info = check_token_security(ca)
 
                     alert_msg = (
                         f"☀️ <b>SOLANA ALPHA DETECTED!</b>\n\n"
                         f"👤 <b>Account:</b> @{username} ({info})\n"
-                        f"🪙 <b>Token:</b> ${symbol}\n"
-                        f"⚡ <b>5m Volume:</b> {vol5m_formatted}\n"
-                        f"📊 <b>Market Cap:</b> {mc_formatted}\n"
-                        f"💧 <b>Liquidity:</b> {liq_formatted}\n"
+                        f"🪙 <b>Token:</b> ${token_info['symbol']}\n"
+                        f"⚡ <b>5m Volume:</b> {token_info['volume_5m']}\n"
+                        f"📊 <b>Market Cap:</b> {token_info['market_cap']}\n"
+                        f"💧 <b>Liquidity:</b> {token_info['liquidity']}\n"
                         f"⏳ <b>Age:</b> {token_info['age_days']} روز\n\n"
                         f"🔑 <b>Solana CA:</b>\n<code>{ca}</code>\n\n"
                         f"{security_info}\n"

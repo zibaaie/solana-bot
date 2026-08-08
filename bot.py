@@ -23,7 +23,6 @@ CONFLUENCE_WINDOW_SECONDS = 1800  # بازه زمانی ۳۰ دقیقه
 
 # ----------------- لیست اکانت‌ها -----------------
 SOLANA_WATCHLIST = {
-    # Top Alpha Callers & Key Influencers
     "blkn0iz06": "Ansem - Top Meme Callers",
     "idrawfire": "Mitch - Senior Trader & Alpha Caller",
     "LarpVonTrier": "LarpVonTrier - Early Meme Alpha Finder",
@@ -33,14 +32,10 @@ SOLANA_WATCHLIST = {
     "arrogantfrfr": "Arrogant - On-Chain Trader",
     "0xVonGogh": "VonGogh - Gem Finder",
     "MuroCrypto": "Muro - Price Action & Low Cap",
-
-    # On-Chain & Smart Money Trackers
     "lookonchain": "Lookonchain - Whale Tracker",
     "bubblemaps": "Bubblemaps - Insider Detection",
     "OnChainDataNerd": "Onchain Data Nerd - Smart Money",
     "SolanaFloor": "Solana Floor - Ecosystem News",
-
-    # High-Volume Meme Callers & Channels
     "Poe_Ether": "Poe - High-Volume Meme Caller",
     "thecexoffender": "CEX Offender - Solana Meme Caller",
     "Renzofks": "Renzo - Alpha Trader",
@@ -61,17 +56,9 @@ SOLANA_WATCHLIST = {
     "SolanaWhaleAlert": "Solana Whale Alert - Whale Transfers",
     "RaydiumProtocol": "Raydium Protocol - DEX Official",
     "PhotonSolana": "Photon Solana - Platform Alerts",
-    "SynthetixTrade": "Synthetix Trade - Personal Account",
-    "sierasfx": "sierasfx - Personal Account"
+    "sierasfx": "sierasfx - Personal Account",
+    "SynthetixTrade": "SynthetixTrade - Personal Account"
 }
-
-# لیست سرورهای فعال جهت دریافت چرخه‌ای
-RSS_SERVERS = [
-    "https://nitter.poast.org",
-    "https://nitter.privacydev.net",
-    "https://nitter.freedit.eu",
-    "https://rsshub.app/twitter/user"
-]
 
 seen_tweet_ids = set()
 token_mentions = defaultdict(list)
@@ -208,24 +195,31 @@ def check_token_security(mint_address):
         return "🛡️ <b>RugCheck:</b> خطا در دریافت استعلام"
 
 
-def fetch_tweets_multi_source(username):
+def fetch_tweets_syndication(username):
+    url = f"https://syndication.twitter.com/srv/timeline-profile/history?screen_name={username}"
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json"
     }
 
-    for server in RSS_SERVERS:
-        try:
-            url = f"{server}/{username}/rss" if "rsshub" not in server else f"{server}/{username}"
-            resp = requests.get(url, headers=headers, timeout=4)
-            if resp.status_code == 200 and len(resp.text) > 200:
-                text = resp.text
-                cas = extract_solana_address(text)
-                tickers = extract_tickers(text)
-                if cas or tickers:
-                    tweet_id = f"{username}_{hash(text)}"
-                    return [(tweet_id, text, cas, tickers)]
-        except Exception:
-            continue
+    try:
+        resp = requests.get(url, headers=headers, timeout=6)
+        if resp.status_code == 200:
+            data = resp.json()
+            raw_html = data.get("body", "")
+            if not raw_html:
+                return []
+
+            results = []
+            cas = extract_solana_address(raw_html)
+            tickers = extract_tickers(raw_html)
+
+            if cas or tickers:
+                tweet_id = f"{username}_{hash(raw_html[:200])}"
+                results.append((tweet_id, raw_html, cas, tickers))
+            return results
+    except Exception as e:
+        print(f"Syndication Fetch Error for @{username}: {e}")
     return []
 
 
@@ -240,13 +234,13 @@ def check_confluence(ca, username):
 
 
 async def main():
-    print("🚀 Solana Multi-Source Free Bot Started...")
+    print("🚀 Solana Syndication Direct Bot Started...")
 
     while True:
         try:
             for username, user_desc in SOLANA_WATCHLIST.items():
                 try:
-                    results = fetch_tweets_multi_source(username)
+                    results = fetch_tweets_syndication(username)
 
                     for tweet_id, raw_text, cas, tickers in results:
                         if not tweet_id or tweet_id in seen_tweet_ids:
@@ -304,7 +298,7 @@ async def main():
                 except Exception as e:
                     print(f"Error checking @{username}: {e}")
 
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(1.0)
         except Exception as global_e:
             print(f"Global Loop Error: {global_e}")
         

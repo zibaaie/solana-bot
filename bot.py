@@ -2,6 +2,7 @@ import asyncio
 import os
 import re
 import time
+from bs4 import BeautifulSoup
 import requests
 
 # ----------------- تنظیمات متغیرهای محیطی -----------------
@@ -11,10 +12,10 @@ TELEGRAM_BOT_TOKEN = os.getenv(
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "95150036")
 
 # ----------------- فیلترهای مالی و تکنیکال -----------------
-MIN_5M_VOLUME = 1000         # حداقل حجم معاملات ۵ دقیقه اخیر (دلار)
+MIN_5M_VOLUME = 1000         # حداقل حجم ۵ دقیقه (دلار)
 MIN_MARKET_CAP = 10000       # حداقل مارکت‌کپ (دلار)
 MIN_LIQUIDITY = 3000         # حداقل نقدینگی (دلار)
-MIN_24H_VOLUME = 5000        # حداقل حجم معاملات ۲۴ ساعته (دلار)
+MIN_24H_VOLUME = 5000        # حداقل حجم ۲۴ ساعته (دلار)
 MIN_LIQUIDITY_RATIO = 0.10   # حداقل نسبت نقدینگی به مارکت‌کپ (۱۰٪)
 MAX_AGE_DAYS = 90            # حداکثر سن توکن (روز)
 
@@ -87,21 +88,20 @@ def extract_tickers(text):
     return re.findall(ticker_pattern, str(text))
 
 
-def evaluate_filters(data, mint_address):
-    """اعمال کامل فیلترهای عددی روی دیتای GMGN"""
-    created_at = data.get("creation_timestamp", 0)
+def evaluate_dex_pair(pair, mint_address):
+    """اعمال فیلترها روی دیتای استخراج شده"""
+    created_at = pair.get("pairCreatedAt", 0) / 1000.0
     age_days = (time.time() - created_at) / 86400.0 if created_at > 0 else 0
 
-    name = data.get("name", "Unknown")
-    symbol = data.get("symbol", "UNKNOWN")
-    market_cap = data.get("market_cap", 0) or data.get("fdv", 0) or 0
-    liquidity = data.get("liquidity", 0) or 0
-    volume_5m = data.get("volume_5m", 0) or 0
-    volume_24h = data.get("volume_24h", 0) or 0
+    name = pair.get("baseToken", {}).get("name", "Unknown")
+    symbol = pair.get("baseToken", {}).get("symbol", "UNKNOWN")
+    market_cap = pair.get("fdv", pair.get("marketCap", 0)) or 0
+    liquidity = pair.get("liquidity", {}).get("usd", 0) or 0
+    volume_5m = pair.get("volume", {}).get("m5", 0) or 0
+    volume_24h = pair.get("volume", {}).get("h24", 0) or 0
 
     liq_ratio = (liquidity / market_cap) if market_cap > 0 else 0
 
-    # بررسی تک‌تک فیلترها
     is_valid = (
         volume_5m >= MIN_5M_VOLUME
         and age_days <= MAX_AGE_DAYS
@@ -125,39 +125,41 @@ def evaluate_filters(data, mint_address):
     }
 
 
-def get_gmgn_info_by_ca(mint_address):
-    url = f"https://gmgn.ai/defi/quotation/v1/tokens/sol/{mint_address}"
-    headers = {"User-Agent": "Mozilla/5.0"}
+def get_token_info_by_ca(mint_address):
+    url = f"https://api.dexscreener.com/latest/dex/tokens/{mint_address}"
     try:
-        resp = requests.get(url, headers=headers, timeout=5)
+        resp = requests.get(url, timeout=5)
         if resp.status_code == 200:
-            res = resp.json()
-            if res.get("code") == 0:
-                data = res.get("data", {}).get("token", {})
-                return evaluate_filters(data, mint_address)
+            data = resp.json()
+            pairs = data.get("pairs")
+            if pairs:
+                sol_pairs = [p for p in pairs if p.get("chainId") == "solana"]
+                if sol_pairs:
+                    return evaluate_dex_pair(sol_pairs[0], mint_address)
     except Exception as e:
-        print(f"GMGN CA Error: {e}")
+        print(f"DexScreener CA Fetch Error: {e}")
     return None
 
 
-def get_gmgn_info_by_ticker(ticker):
-    url = f"https://gmgn.ai/api/v1/search?q={ticker}&chain=sol"
-    headers = {"User-Agent": "Mozilla/5.0"}
+def get_token_info_by_ticker(ticker):
+    url = f"https://api.dexscreener.com/latest/dex/search?q={ticker}"
     try:
-        resp = requests.get(url, headers=headers, timeout=5)
+        resp = requests.get(url, timeout=5)
         if resp.status_code == 200:
-            res = resp.json()
-            tokens = res.get("data", {}).get("tokens", [])
-            sol_tokens = [
-                t for t in tokens if t.get("symbol", "").upper() == ticker.upper()
+            data = resp.json()
+            pairs = data.get("pairs", [])
+            sol_pairs = [
+                p for p in pairs 
+                if p.get("chainId") == "solana" and 
+                p.get("baseToken", {}).get("symbol", "").upper() == ticker.upper()
             ]
-            if sol_tokens:
-                sol_tokens.sort(key=lambda x: x.get("liquidity", 0), reverse=True)
-                target_ca = sol_tokens[0].get("address")
+            if sol_pairs:
+                sol_pairs.sort(key=lambda x: x.get("liquidity", {}).get("usd", 0), reverse=True)
+                target_ca = sol_pairs[0].get("baseToken", {}).get("address")
                 if target_ca:
-                    return get_gmgn_info_by_ca(target_ca)
+                    return evaluate_dex_pair(sol_pairs[0], target_ca)
     except Exception as e:
-        print(f"GMGN Ticker Error: {e}")
+        print(f"DexScreener Ticker Fetch Error: {e}")
     return None
 
 
@@ -190,32 +192,31 @@ def fetch_tweets_syndication(username):
     url = f"https://syndication.twitter.com/srv/timeline-profile/history?screen_name={username}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
     }
 
     try:
-        resp = requests.get(url, headers=headers, timeout=6)
+        resp = requests.get(url, headers=headers, timeout=8)
         if resp.status_code == 200:
-            data = resp.json()
-            raw_html = data.get("body", "")
-            if not raw_html:
-                return []
+            # پارس کردن HTML جهت استخراج متن خالص توئیت‌ها
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            text_content = soup.get_text()
 
-            cas = extract_solana_address(raw_html)
-            tickers = extract_tickers(raw_html)
+            cas = extract_solana_address(text_content)
+            tickers = extract_tickers(text_content)
 
             if cas or tickers:
-                tweet_id = f"{username}_{hash(raw_html[:200])}"
-                return [(tweet_id, raw_html, cas, tickers)]
+                tweet_id = f"{username}_{hash(text_content[:300])}"
+                return [(tweet_id, text_content, cas, tickers)]
     except Exception as e:
         print(f"Syndication Error for @{username}: {e}")
     return []
 
 
 async def main():
-    print("🚀 GMGN Solana Alpha Scanner Started...")
+    print("🚀 Solana Alpha Scanner Online...")
     send_telegram_alert(
-        "⚡ <b>GMGN Pro Scanner Online!</b>\nفیلترهای نقدینگی، مارکت‌کپ و حجم معاملات فعال شدند."
+        "⚡ <b>Solana Pro Scanner Online!</b>\nسیستم دریافت اطلاعات و فیلترهای نقدینگی فعال شد."
     )
 
     while True:
@@ -230,41 +231,29 @@ async def main():
                     token_info = None
 
                     if cas:
-                        token_info = get_gmgn_info_by_ca(cas[0])
+                        token_info = get_token_info_by_ca(cas[0])
                     elif tickers:
                         ignored = ["SOL", "USDC", "USDT", "BTC", "ETH"]
                         filtered_tickers = [
                             t for t in tickers if t.upper() not in ignored
                         ]
                         if filtered_tickers:
-                            token_info = get_gmgn_info_by_ticker(filtered_tickers[0])
+                            token_info = get_token_info_by_ticker(filtered_tickers[0])
 
                     if token_info:
-                        # رد کردن توکن‌هایی که شروط فیلتر را پاس نکنند
                         if not token_info["valid"]:
                             continue
 
                         seen_tweet_ids.add(tweet_id)
                         ca = token_info["ca"]
                         security_info = check_token_security(ca)
-                        mc_formatted = (
-                            f"${token_info['market_cap']:,.0f}"
-                            if token_info["market_cap"]
-                            else "N/A"
-                        )
-                        liq_formatted = (
-                            f"${token_info['liquidity']:,.0f}"
-                            if token_info["liquidity"]
-                            else "N/A"
-                        )
-                        vol_5m_formatted = (
-                            f"${token_info['volume_5m']:,.0f}"
-                            if token_info["volume_5m"]
-                            else "N/A"
-                        )
+                        
+                        mc_formatted = f"${token_info['market_cap']:,.0f}" if token_info["market_cap"] else "N/A"
+                        liq_formatted = f"${token_info['liquidity']:,.0f}" if token_info["liquidity"] else "N/A"
+                        vol_5m_formatted = f"${token_info['volume_5m']:,.0f}" if token_info["volume_5m"] else "N/A"
 
                         alert_msg = (
-                            f"☀️ <b>SOLANA ALPHA DETECTED (GMGN)!</b>\n\n"
+                            f"☀️ <b>SOLANA ALPHA DETECTED!</b>\n\n"
                             f"👤 <b>Account:</b> @{username}\n"
                             f"🪙 <b>Token:</b> {token_info['name']} (${token_info['symbol']})\n"
                             f"⚡ <b>5m Volume:</b> {vol_5m_formatted}\n"
@@ -282,7 +271,7 @@ async def main():
             except Exception as e:
                 print(f"Error checking @{username}: {e}")
 
-            await asyncio.sleep(1.5)
+            await asyncio.sleep(2.0)
         await asyncio.sleep(10)
 
 

@@ -10,6 +10,20 @@ TELEGRAM_BOT_TOKEN = os.getenv(
 )
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "95150036")
 
+# ----------------- فیلترهای دقیق (تنظیم شده طبق درخواست) -----------------
+MAX_AGE_DAYS = 30.0        # حداکثر سن توکن: ۳۰ روز
+MIN_LIQUIDITY = 2500       # حداقل نقدینگی: ۲,۵۰۰ دلار
+MIN_MARKET_CAP = 20000     # حداقل مارکت‌کپ: ۲۰,۰۰۰ دلار
+MIN_5M_VOLUME = 500        # حداقل حجم ۵ دقیقه: ۵۰۰ دلار
+MIN_24H_VOLUME = 5000      # حداقل حجم ۲۴ ساعته: ۵,۰۰۰ دلار
+MIN_LIQUIDITY_RATIO = 0.05 # حداقل نسبت نقدینگی به مارکت‌کپ (۵٪)
+
+EXCLUDED_CAS = {
+    "So11111111111111111111111111111111111111112",  # Native SOL
+    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  # USDC
+    "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",  # USDT
+}
+
 # ----------------- لیست اکانت‌های تحت نظر -----------------
 SOLANA_WATCHLIST = {
     # Top Alpha Callers & Key Influencers
@@ -89,20 +103,19 @@ def check_token_security(mint_address):
             score = data.get("score", 0)
 
             if score < 1000:
-                risk_label = "🟢 <b>Low Risk</b>"
+                risk_label = "🟢 Low Risk"
             elif score < 5000:
-                risk_label = "🟡 <b>Medium Risk</b>"
+                risk_label = "🟡 Medium Risk"
             else:
-                risk_label = "🔴 <b>High Risk</b>"
+                risk_label = "🔴 High Risk"
 
             risks = data.get("risks", [])
             risk_details = [f"• {r.get('name')}" for r in risks[:3]] if risks else []
             risk_text = "\n".join(risk_details) if risk_details else "• پاک"
 
             return (
-                f"🛡️ <b>RugCheck Analysis:</b>\n"
-                f"Score: {score} | Verdict: {risk_label}\n"
-                f"<b>Risks:</b>\n{risk_text}\n"
+                f"🛡️ <b>RugCheck Score:</b> {score} ({risk_label})\n"
+                f"<b>Risks:</b>\n{risk_text}"
             )
         return "🛡️ <b>RugCheck:</b> در حال بروزرسانی..."
     except Exception:
@@ -110,6 +123,9 @@ def check_token_security(mint_address):
 
 
 def get_token_data(ca):
+    if ca in EXCLUDED_CAS:
+        return {"valid": False, "reason": "System/Native Token Excluded"}
+
     url = f"https://api.dexscreener.com/latest/dex/tokens/{ca}"
     try:
         resp = requests.get(url, timeout=5)
@@ -130,27 +146,40 @@ def get_token_data(ca):
                     market_cap = pair.get("fdv", pair.get("marketCap", 0)) or 0
                     liquidity = pair.get("liquidity", {}).get("usd", 0) or 0
                     volume_5m = pair.get("volume", {}).get("m5", 0) or 0
+                    volume_24h = pair.get("volume", {}).get("h24", 0) or 0
+
+                    liq_ratio = (liquidity / market_cap) if market_cap > 0 else 0
+
+                    # ----------------- بررسی شروط فیلتر -----------------
+                    if age_days > MAX_AGE_DAYS:
+                        return {"valid": False, "reason": f"Age ({round(age_days, 1)}d) > {MAX_AGE_DAYS}d"}
+                    if market_cap < MIN_MARKET_CAP:
+                        return {"valid": False, "reason": f"MCap (${market_cap:,.0f}) < ${MIN_MARKET_CAP:,.0f}"}
+                    if liquidity < MIN_LIQUIDITY:
+                        return {"valid": False, "reason": f"Liquidity (${liquidity:,.0f}) < ${MIN_LIQUIDITY:,.0f}"}
+                    if volume_5m < MIN_5M_VOLUME:
+                        return {"valid": False, "reason": f"5m Vol (${volume_5m:,.0f}) < ${MIN_5M_VOLUME:,.0f}"}
+                    if volume_24h < MIN_24H_VOLUME:
+                        return {"valid": False, "reason": f"24h Vol (${volume_24h:,.0f}) < ${MIN_24H_VOLUME:,.0f}"}
+                    if liq_ratio < MIN_LIQUIDITY_RATIO:
+                        return {"valid": False, "reason": f"Liq Ratio ({round(liq_ratio*100, 1)}%) < {int(MIN_LIQUIDITY_RATIO*100)}%"}
 
                     return {
+                        "valid": True,
                         "name": name,
                         "symbol": symbol,
                         "market_cap": f"${market_cap:,.0f}",
                         "liquidity": f"${liquidity:,.0f}",
+                        "liq_ratio": f"{round(liq_ratio * 100, 1)}",
                         "volume_5m": f"${volume_5m:,.0f}",
+                        "volume_24h": f"${volume_24h:,.0f}",
                         "age_days": round(age_days, 1),
                     }
     except Exception as e:
         print(f"Error fetching DexScreener data for {ca}: {e}")
-    
-    # مقادیر پیش‌فرض برای توکن‌های کاملاً جدید بدون جفت‌ارز در DexScreener
-    return {
-        "name": "Unknown",
-        "symbol": "NEW_TOKEN",
-        "market_cap": "N/A",
-        "liquidity": "N/A",
-        "volume_5m": "N/A",
-        "age_days": "N/A",
-    }
+
+    # اگر توکن دیتای بازار در DexScreener نداشته باشد، فیلترها را پاس نکرده و رد می‌شود
+    return {"valid": False, "reason": "No valid DexScreener market data"}
 
 
 def fetch_tweets_fast_rss(username):
@@ -197,7 +226,7 @@ def fetch_tweets_fast_rss(username):
 async def main():
     print("🚀 Instant Solana Scanner Engine Started...")
     send_telegram_alert(
-        "⚡ <b>Instant Scanner Active!</b>\nفیلترها کاملاً حذف شدند. همه آلارم‌ها بدون استثنا ارسال می‌شوند."
+        "⚡ <b>Instant Scanner Active!</b>\nفیلترهای جدید (۳۰ روز سن، نقدینگی $2.5K، مارکت‌کپ $20K) فعال شدند."
     )
 
     while True:
@@ -209,23 +238,27 @@ async def main():
                     if not tweet_id or tweet_id in seen_tweet_ids:
                         continue
 
-                    # علامت‌گذاری توئیت برای عدم ارسال تکراری
-                    seen_tweet_ids.add(tweet_id)
-
-                    # دریافت اطلاعات توکن (حتی اگر نود DexScreener نداشته باشد)
                     token_info = get_token_data(ca)
+
+                    if not token_info.get("valid", False):
+                        print(f"⏩ Skipped {ca} from @{username}: {token_info.get('reason')}")
+                        seen_tweet_ids.add(tweet_id)
+                        continue
+
+                    seen_tweet_ids.add(tweet_id)
                     security_info = check_token_security(ca)
 
                     alert_msg = (
                         f"☀️ <b>SOLANA ALPHA DETECTED!</b>\n\n"
-                        f"👤 <b>Account:</b> @{username} ({info})\n"
-                        f"🪙 <b>Token:</b> ${token_info['symbol']}\n"
+                        f"👥 <b>Callers:</b> @{username} ({info})\n"
+                        f"🪙 <b>Token:</b> {token_info['name']} (${token_info['symbol']})\n"
                         f"⚡ <b>5m Volume:</b> {token_info['volume_5m']}\n"
                         f"📊 <b>Market Cap:</b> {token_info['market_cap']}\n"
-                        f"💧 <b>Liquidity:</b> {token_info['liquidity']}\n"
+                        f"💧 <b>Liquidity:</b> {token_info['liquidity']} (نسبت: %{token_info['liq_ratio']})\n"
+                        f"📈 <b>24h Volume:</b> {token_info['volume_24h']}\n"
                         f"⏳ <b>Age:</b> {token_info['age_days']} روز\n\n"
                         f"🔑 <b>Solana CA:</b>\n<code>{ca}</code>\n\n"
-                        f"{security_info}\n"
+                        f"{security_info}\n\n"
                         f"🐸 <a href='https://gmgn.ai/sol/token/{ca}'>GMGN Chart</a> | "
                         f"🦅 <a href='https://dexscreener.com/solana/{ca}'>DexScreener</a> | "
                         f"🧪 <a href='https://photon-sol.tinyastro.io/en/lp/{ca}'>Photon</a>\n\n"

@@ -10,8 +10,8 @@ TELEGRAM_BOT_TOKEN = os.getenv(
 )
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "95150036")
 
-# ----------------- فیلترها -----------------
-MIN_5M_VOLUME = 0           # برای تست روی 0 گذاشته شد
+# ----------------- فیلترها (جهت تست رو 0 تنظیم شده‌اند) -----------------
+MIN_5M_VOLUME = 0
 MIN_MARKET_CAP = 0
 MIN_LIQUIDITY = 0
 MIN_24H_VOLUME = 0
@@ -86,42 +86,6 @@ def extract_tickers(text):
     return re.findall(ticker_pattern, str(text))
 
 
-def evaluate_dex_pair(pair, mint_address):
-    created_at = pair.get("pairCreatedAt", 0) / 1000.0
-    age_days = (time.time() - created_at) / 86400.0 if created_at > 0 else 0
-
-    name = pair.get("baseToken", {}).get("name", "Unknown")
-    symbol = pair.get("baseToken", {}).get("symbol", "UNKNOWN")
-    market_cap = pair.get("fdv", pair.get("marketCap", 0)) or 0
-    liquidity = pair.get("liquidity", {}).get("usd", 0) or 0
-    volume_5m = pair.get("volume", {}).get("m5", 0) or 0
-    volume_24h = pair.get("volume", {}).get("h24", 0) or 0
-
-    liq_ratio = (liquidity / market_cap) if market_cap > 0 else 0
-
-    is_valid = (
-        volume_5m >= MIN_5M_VOLUME
-        and age_days <= MAX_AGE_DAYS
-        and market_cap >= MIN_MARKET_CAP
-        and liquidity >= MIN_LIQUIDITY
-        and volume_24h >= MIN_24H_VOLUME
-        and liq_ratio >= MIN_LIQUIDITY_RATIO
-    )
-
-    return {
-        "ca": mint_address,
-        "name": name,
-        "symbol": symbol,
-        "market_cap": market_cap,
-        "liquidity": liquidity,
-        "volume_5m": volume_5m,
-        "volume_24h": volume_24h,
-        "liq_ratio": round(liq_ratio * 100, 1),
-        "age_days": round(age_days, 1),
-        "valid": is_valid,
-    }
-
-
 def get_token_info_by_ca(mint_address):
     url = f"https://api.dexscreener.com/latest/dex/tokens/{mint_address}"
     try:
@@ -132,7 +96,18 @@ def get_token_info_by_ca(mint_address):
             if pairs:
                 sol_pairs = [p for p in pairs if p.get("chainId") == "solana"]
                 if sol_pairs:
-                    return evaluate_dex_pair(sol_pairs[0], mint_address)
+                    pair = sol_pairs[0]
+                    created_at = pair.get("pairCreatedAt", 0) / 1000.0
+                    age_days = (time.time() - created_at) / 86400.0 if created_at > 0 else 0
+                    return {
+                        "ca": mint_address,
+                        "name": pair.get("baseToken", {}).get("name", "Unknown"),
+                        "symbol": pair.get("baseToken", {}).get("symbol", "UNKNOWN"),
+                        "market_cap": pair.get("fdv", pair.get("marketCap", 0)) or 0,
+                        "liquidity": pair.get("liquidity", {}).get("usd", 0) or 0,
+                        "age_days": round(age_days, 1),
+                        "valid": True,
+                    }
     except Exception as e:
         print(f"DexScreener CA Error: {e}")
     return None
@@ -152,46 +127,60 @@ def get_token_info_by_ticker(ticker):
             ]
             if sol_pairs:
                 sol_pairs.sort(key=lambda x: x.get("liquidity", {}).get("usd", 0), reverse=True)
-                target_ca = sol_pairs[0].get("baseToken", {}).get("address")
-                if target_ca:
-                    return evaluate_dex_pair(sol_pairs[0], target_ca)
+                pair = sol_pairs[0]
+                target_ca = pair.get("baseToken", {}).get("address")
+                created_at = pair.get("pairCreatedAt", 0) / 1000.0
+                age_days = (time.time() - created_at) / 86400.0 if created_at > 0 else 0
+                return {
+                    "ca": target_ca,
+                    "name": pair.get("baseToken", {}).get("name", "Unknown"),
+                    "symbol": pair.get("baseToken", {}).get("symbol", "UNKNOWN"),
+                    "market_cap": pair.get("fdv", pair.get("marketCap", 0)) or 0,
+                    "liquidity": pair.get("liquidity", {}).get("usd", 0) or 0,
+                    "age_days": round(age_days, 1),
+                    "valid": True,
+                }
     except Exception as e:
         print(f"DexScreener Ticker Error: {e}")
     return None
 
 
-def fetch_latest_tweet_fixupx(username):
-    """دریافت مستقیم آخرین توئیت از سرویس FixupX/VxTwitter"""
-    url = f"https://api.vxtwitter.com/{username}"
-    headers = {"User-Agent": "TelegramBot (like TwitterBot)"}
+def fetch_user_timeline_rss(username):
+    """استفاده از سرورهای RSS فعال جهت استخراج بدون بلاکی توئیتر"""
+    providers = [
+        f"https://rsshub.app/twitter/user/{username}",
+        f"https://nitter.privacydev.net/{username}/rss",
+        f"https://nitter.poast.org/{username}/rss"
+    ]
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
 
-    try:
-        resp = requests.get(url, headers=headers, timeout=6)
-        if resp.status_code == 200:
-            data = resp.json()
-            tweet_id = data.get("tweet_id") or data.get("id")
-            text = data.get("text", "")
-
-            if text:
-                cas = extract_solana_address(text)
-                tickers = extract_tickers(text)
+    for url in providers:
+        try:
+            resp = requests.get(url, headers=headers, timeout=5)
+            if resp.status_code == 200 and len(resp.text) > 200:
+                cas = extract_solana_address(resp.text)
+                tickers = extract_tickers(resp.text)
                 if cas or tickers:
-                    return [(f"{username}_{tweet_id}_{hash(text)}", text, cas, tickers)]
-    except Exception as e:
-        print(f"FixupX Error for @{username}: {e}")
+                    tweet_hash = f"{username}_{hash(resp.text[:300])}"
+                    return [(tweet_hash, resp.text, cas, tickers)]
+        except Exception:
+            continue
     return []
 
 
 async def main():
-    print("🚀 Solana Alpha Scanner (FixupX Direct Engine) Online...")
+    print("🚀 Solana Alpha Scanner (Multi-Provider Engine) Online...")
     send_telegram_alert(
-        "⚡ <b>FixupX Real-Time Engine Active!</b>\nپایش لحظه‌ای پست‌های جدید فعال شد."
+        "⚡ <b>Multi-Provider Engine Online!</b>\nسیستم دریافت لحظه‌ای فعال شد."
     )
 
     while True:
         for username in SOLANA_WATCHLIST:
             try:
-                results = fetch_latest_tweet_fixupx(username)
+                results = fetch_user_timeline_rss(username)
 
                 for tweet_id, raw_text, cas, tickers in results:
                     if not tweet_id or tweet_id in seen_tweet_ids:

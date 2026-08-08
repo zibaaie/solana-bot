@@ -10,13 +10,13 @@ TELEGRAM_BOT_TOKEN = os.getenv(
 )
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "95150036")
 
-# ----------------- فیلترها (جهت تست مقادیر کم شده‌اند) -----------------
-MIN_5M_VOLUME = 100         # دلار
-MIN_MARKET_CAP = 1000       # دلار
-MIN_LIQUIDITY = 500         # دلار
-MIN_24H_VOLUME = 1000       # دلار
-MIN_LIQUIDITY_RATIO = 0.05  # ۵ درصد
-MAX_AGE_DAYS = 90           # روز
+# ----------------- فیلترها -----------------
+MIN_5M_VOLUME = 0           # برای تست روی 0 گذاشته شد
+MIN_MARKET_CAP = 0
+MIN_LIQUIDITY = 0
+MIN_24H_VOLUME = 0
+MIN_LIQUIDITY_RATIO = 0
+MAX_AGE_DAYS = 365
 
 SOLANA_WATCHLIST = [
     "SynthetixTrade",
@@ -134,7 +134,7 @@ def get_token_info_by_ca(mint_address):
                 if sol_pairs:
                     return evaluate_dex_pair(sol_pairs[0], mint_address)
     except Exception as e:
-        print(f"DexScreener CA Fetch Error: {e}")
+        print(f"DexScreener CA Error: {e}")
     return None
 
 
@@ -156,74 +156,48 @@ def get_token_info_by_ticker(ticker):
                 if target_ca:
                     return evaluate_dex_pair(sol_pairs[0], target_ca)
     except Exception as e:
-        print(f"DexScreener Ticker Fetch Error: {e}")
+        print(f"DexScreener Ticker Error: {e}")
     return None
 
 
-def check_token_security(mint_address):
-    url = f"https://api.rugcheck.xyz/v1/tokens/{mint_address}/report/summary"
-    try:
-        response = requests.get(url, timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            score = data.get("score", 0)
-
-            if score < 1000:
-                risk_label = "🟢 <b>Low Risk</b>"
-            elif score < 5000:
-                risk_label = "🟡 <b>Medium Risk</b>"
-            else:
-                risk_label = "🔴 <b>High Risk</b>"
-
-            risks = data.get("risks", [])
-            risk_details = [f"• {r.get('name')}" for r in risks[:3]] if risks else []
-            risk_text = "\n".join(risk_details) if risk_details else "• پاک"
-
-            return f"🛡️ <b>RugCheck Score:</b> {score} ({risk_label})\n<b>Risks:</b>\n{risk_text}"
-        return "🛡️ <b>RugCheck:</b> اطلاعات در دسترس نیست"
-    except Exception:
-        return "🛡️ <b>RugCheck:</b> خطا در دریافت استعلام"
-
-
-def fetch_latest_tweet_fxtwitter(username):
-    """دریافت آخرین توئیت از سرویس FxTwitter"""
-    url = f"https://api.fxtwitter.com/{username}"
-    headers = {"User-Agent": "Mozilla/5.0"}
+def fetch_latest_tweet_fixupx(username):
+    """دریافت مستقیم آخرین توئیت از سرویس FixupX/VxTwitter"""
+    url = f"https://api.vxtwitter.com/{username}"
+    headers = {"User-Agent": "TelegramBot (like TwitterBot)"}
 
     try:
         resp = requests.get(url, headers=headers, timeout=6)
         if resp.status_code == 200:
             data = resp.json()
-            tweet = data.get("tweet", {})
-            tweet_id = tweet.get("id")
-            text = tweet.get("text", "")
+            tweet_id = data.get("tweet_id") or data.get("id")
+            text = data.get("text", "")
 
-            if text and tweet_id:
+            if text:
                 cas = extract_solana_address(text)
                 tickers = extract_tickers(text)
-                return [(f"{username}_{tweet_id}", text, cas, tickers)]
+                if cas or tickers:
+                    return [(f"{username}_{tweet_id}_{hash(text)}", text, cas, tickers)]
     except Exception as e:
-        print(f"FxTwitter API Error for @{username}: {e}")
+        print(f"FixupX Error for @{username}: {e}")
     return []
 
 
 async def main():
-    print("🚀 Solana Alpha Scanner (FxTwitter Engine) Online...")
+    print("🚀 Solana Alpha Scanner (FixupX Direct Engine) Online...")
     send_telegram_alert(
-        "⚡ <b>Solana Pro Scanner Online!</b>\nموتور FxTwitter فعال شد."
+        "⚡ <b>FixupX Real-Time Engine Active!</b>\nپایش لحظه‌ای پست‌های جدید فعال شد."
     )
 
     while True:
         for username in SOLANA_WATCHLIST:
             try:
-                print(f"🔍 Checking @{username}...")
-                results = fetch_latest_tweet_fxtwitter(username)
+                results = fetch_latest_tweet_fixupx(username)
 
                 for tweet_id, raw_text, cas, tickers in results:
                     if not tweet_id or tweet_id in seen_tweet_ids:
                         continue
 
-                    print(f"📌 New Tweet Found from @{username}: CAS={cas}, Tickers={tickers}")
+                    print(f"🎯 MATCH FOUND! @{username} -> CA: {cas}, Ticker: {tickers}")
                     token_info = None
 
                     if cas:
@@ -237,28 +211,20 @@ async def main():
                             token_info = get_token_info_by_ticker(filtered_tickers[0])
 
                     if token_info:
-                        if not token_info["valid"]:
-                            print(f"⚠️ Token {token_info['symbol']} failed filters.")
-                            continue
-
                         seen_tweet_ids.add(tweet_id)
                         ca = token_info["ca"]
-                        security_info = check_token_security(ca)
 
                         mc_formatted = f"${token_info['market_cap']:,.0f}" if token_info["market_cap"] else "N/A"
                         liq_formatted = f"${token_info['liquidity']:,.0f}" if token_info["liquidity"] else "N/A"
-                        vol_5m_formatted = f"${token_info['volume_5m']:,.0f}" if token_info["volume_5m"] else "N/A"
 
                         alert_msg = (
                             f"☀️ <b>SOLANA ALPHA DETECTED!</b>\n\n"
                             f"👤 <b>Account:</b> @{username}\n"
                             f"🪙 <b>Token:</b> {token_info['name']} (${token_info['symbol']})\n"
-                            f"⚡ <b>5m Volume:</b> {vol_5m_formatted}\n"
                             f"📊 <b>Market Cap:</b> {mc_formatted}\n"
-                            f"💧 <b>Liquidity:</b> {liq_formatted} (نسبت: {token_info['liq_ratio']}%)\n"
+                            f"💧 <b>Liquidity:</b> {liq_formatted}\n"
                             f"⏳ <b>Age:</b> {token_info['age_days']} روز\n\n"
                             f"🔑 <b>Solana CA:</b>\n<code>{ca}</code>\n\n"
-                            f"{security_info}\n\n"
                             f"🐸 <a href='https://gmgn.ai/sol/token/{ca}'>GMGN Chart</a> | "
                             f"🧪 <a href='https://photon-sol.tinyastro.io/en/lp/{ca}'>Photon</a>\n"
                             f"🔗 <a href='https://x.com/{username}'>مشاهده اکانت</a>"
@@ -268,8 +234,8 @@ async def main():
             except Exception as e:
                 print(f"Error checking @{username}: {e}")
 
-            await asyncio.sleep(2.0)
-        await asyncio.sleep(15)
+            await asyncio.sleep(1.5)
+        await asyncio.sleep(10)
 
 
 if __name__ == "__main__":

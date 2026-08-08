@@ -119,6 +119,7 @@ def check_token_security(mint_address):
 
 
 def get_token_data_and_evaluate(ca):
+    """دریافت دیتای بازار و ارزیابی فیلترهای مالی"""
     url = f"https://api.dexscreener.com/latest/dex/tokens/{ca}"
     try:
         resp = requests.get(url, timeout=5)
@@ -165,7 +166,9 @@ def get_token_data_and_evaluate(ca):
                     }
     except Exception as e:
         print(f"Error fetching DexScreener data for {ca}: {e}")
-    return None
+    
+    # اگر توکن در DexScreener پیدا نشود، غیرفعال بازگردانده می‌شود تا پیام‌های خالی فرستاده نشوند
+    return {"valid": False, "market_cap": 0, "liquidity": 0, "volume_5m": 0, "symbol": "UNKNOWN", "age_days": 0}
 
 
 def fetch_tweets_fast_rss(username):
@@ -212,7 +215,7 @@ def fetch_tweets_fast_rss(username):
 async def main():
     print("🚀 Instant Solana Scanner Engine Started...")
     send_telegram_alert(
-        "⚡ <b>Instant Scanner Active!</b>\nلیست آلفا آپدیت شد و سیستم فیلترها فعال است."
+        "⚡ <b>Instant Scanner Active!</b>\nلیست ادغام شد و فیلتر عدم ارسال توکن‌های بدون دیتا فعال گردید."
     )
 
     while True:
@@ -224,35 +227,24 @@ async def main():
                     if not tweet_id or tweet_id in seen_tweet_ids:
                         continue
 
+                    # دریافت دیتای بازار و ارزیابی شروط مالی
                     token_info = get_token_data_and_evaluate(ca)
 
-                    if token_info and not token_info["valid"]:
+                    # چک کردن شرط صحت: اگر توکن فیلترها را پاس نکند یا دیتای DexScreener نداشته باشد، رد می‌شود
+                    if not token_info or not token_info.get("valid", False):
                         print(
-                            f"⚠️ Token {ca} from @{username} failed financial filters."
+                            f"⚠️ Token {ca} from @{username} failed financial filters or has no Dex data."
                         )
+                        seen_tweet_ids.add(tweet_id)
                         continue
 
                     seen_tweet_ids.add(tweet_id)
                     security_info = check_token_security(ca)
 
-                    mc_formatted = (
-                        f"${token_info['market_cap']:,.0f}"
-                        if token_info and token_info["market_cap"]
-                        else "N/A"
-                    )
-                    liq_formatted = (
-                        f"${token_info['liquidity']:,.0f}"
-                        if token_info and token_info["liquidity"]
-                        else "N/A"
-                    )
-                    vol5m_formatted = (
-                        f"${token_info['volume_5m']:,.0f}"
-                        if token_info and token_info["volume_5m"]
-                        else "N/A"
-                    )
-                    symbol = (
-                        token_info["symbol"] if token_info else "UNKNOWN"
-                    )
+                    mc_formatted = f"${token_info['market_cap']:,.0f}"
+                    liq_formatted = f"${token_info['liquidity']:,.0f}"
+                    vol5m_formatted = f"${token_info['volume_5m']:,.0f}"
+                    symbol = token_info["symbol"]
 
                     alert_msg = (
                         f"☀️ <b>SOLANA ALPHA DETECTED!</b>\n\n"
@@ -261,7 +253,7 @@ async def main():
                         f"⚡ <b>5m Volume:</b> {vol5m_formatted}\n"
                         f"📊 <b>Market Cap:</b> {mc_formatted}\n"
                         f"💧 <b>Liquidity:</b> {liq_formatted}\n"
-                        f"⏳ <b>Age:</b> {token_info['age_days'] if token_info else 'N/A'} روز\n\n"
+                        f"⏳ <b>Age:</b> {token_info['age_days']} روز\n\n"
                         f"🔑 <b>Solana CA:</b>\n<code>{ca}</code>\n\n"
                         f"{security_info}\n"
                         f"🐸 <a href='https://gmgn.ai/sol/token/{ca}'>GMGN Chart</a> | "
